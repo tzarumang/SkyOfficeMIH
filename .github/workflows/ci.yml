@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: yarn
+
+      - name: Install server dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install shared types
+        run: yarn install --frozen-lockfile
+        working-directory: types
+
+      - name: Install client dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: client
+
+      - name: Typecheck server
+        run: yarn tsc --project server/tsconfig.server.json --noEmit
+
+      - name: Build client
+        run: yarn build
+        working-directory: client
+
+      - name: Test
+        run: yarn test
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Report dependency advisories
+        # `yarn audit` exits non-zero whenever any advisory exists, and the ones
+        # outstanding today are transitive and unreachable at runtime: an unused
+        # mongoose driver and the monitor's http client via colyseus 0.14, and
+        # tar via bcrypt's build tooling. Clearing them needs a colyseus major
+        # upgrade. Failing on them would leave this job red on every single run,
+        # which only teaches everyone to ignore CI - so it reports into the job
+        # summary instead, and a human decides.
+        run: |
+          for dir in . types client; do
+            echo "### ${dir}" >> "$GITHUB_STEP_SUMMARY"
+            (cd "${dir}" && yarn audit --level high --groups dependencies || true) > "/tmp/audit.txt" 2>&1
+            cat "/tmp/audit.txt"
+            grep -E "^(Severity|[0-9]+ vulnerabilities)" "/tmp/audit.txt" >> "$GITHUB_STEP_SUMMARY" || echo "no advisories at this level" >> "$GITHUB_STEP_SUMMARY"
+          done

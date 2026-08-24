@@ -8,5 +8,6 @@ export interface IRoomData {
   name: string
   description: string
   password: string | null
-  autoDispose: boolean
+  /** keep the room out of the lobby listing; joinable by id only */
+  unlisted: boolean
 }

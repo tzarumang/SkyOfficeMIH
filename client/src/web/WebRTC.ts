@@ -1,15 +1,17 @@
-import Peer from 'peerjs'
+import Peer, { MediaConnection } from 'peerjs'
 import Network from '../services/Network'
 import store from '../stores'
 import { setVideoConnected } from '../stores/UserStore'
+import { peerOptions } from './peerConfig'
+import { toPeerId } from '../util'
 
 /** how long a peer stays callable after we last saw it next to us */
 const ALLOW_WINDOW_MS = 10000
 
 export default class WebRTC {
   private myPeer: Peer
-  private peers = new Map<string, { call: Peer.MediaConnection; video: HTMLVideoElement }>()
-  private onCalledPeers = new Map<string, { call: Peer.MediaConnection; video: HTMLVideoElement }>()
+  private peers = new Map<string, { call: MediaConnection; video: HTMLVideoElement }>()
+  private onCalledPeers = new Map<string, { call: MediaConnection; video: HTMLVideoElement }>()
   private videoGrid = document.querySelector('.video-grid')
   private buttonGrid = document.querySelector('.button-grid')
   private myVideo = document.createElement('video')
@@ -19,8 +21,8 @@ export default class WebRTC {
   private allowedPeers = new Map<string, number>()
 
   constructor(userId: string, network: Network) {
-    const sanitizedId = this.replaceInvalidId(userId)
-    this.myPeer = new Peer(sanitizedId)
+    const sanitizedId = toPeerId(userId)
+    this.myPeer = new Peer(sanitizedId, peerOptions())
     this.network = network
     console.log('userId:', userId)
     console.log('sanitizedId:', sanitizedId)
@@ -36,11 +38,6 @@ export default class WebRTC {
     this.initialize()
   }
 
-  // PeerJS throws invalid_id error if it contains some characters such as that colyseus generates.
-  // https://peerjs.com/docs.html#peer-id
-  private replaceInvalidId(userId: string) {
-    return userId.replace(/[^0-9a-z]/gi, 'G')
-  }
 
   /**
    * Proximity is what authorizes a call, so the game tells us who is currently
@@ -49,7 +46,7 @@ export default class WebRTC {
    * while the signalling round trip is still going.
    */
   allowPeer(userId: string) {
-    this.allowedPeers.set(this.replaceInvalidId(userId), Date.now() + ALLOW_WINDOW_MS)
+    this.allowedPeers.set(toPeerId(userId), Date.now() + ALLOW_WINDOW_MS)
   }
 
   private isPeerAllowed(peerId: string) {
@@ -119,7 +116,7 @@ export default class WebRTC {
   // method to call a peer
   connectToNewUser(userId: string) {
     if (this.myStream) {
-      const sanitizedId = this.replaceInvalidId(userId)
+      const sanitizedId = toPeerId(userId)
       if (!this.peers.has(sanitizedId)) {
         console.log('calling', sanitizedId)
         const call = this.myPeer.call(sanitizedId, this.myStream)
@@ -147,7 +144,7 @@ export default class WebRTC {
 
   // method to remove video stream (when we are the host of the call)
   deleteVideoStream(userId: string) {
-    const sanitizedId = this.replaceInvalidId(userId)
+    const sanitizedId = toPeerId(userId)
     this.allowedPeers.delete(sanitizedId)
     if (this.peers.has(sanitizedId)) {
       const peer = this.peers.get(sanitizedId)
@@ -159,7 +156,7 @@ export default class WebRTC {
 
   // method to remove video stream (when we are the guest of the call)
   deleteOnCalledVideoStream(userId: string) {
-    const sanitizedId = this.replaceInvalidId(userId)
+    const sanitizedId = toPeerId(userId)
     this.allowedPeers.delete(sanitizedId)
     if (this.onCalledPeers.has(sanitizedId)) {
       const onCalledPeer = this.onCalledPeers.get(sanitizedId)

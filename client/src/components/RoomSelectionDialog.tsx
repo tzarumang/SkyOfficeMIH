@@ -12,6 +12,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 
 import { CustomRoomTable } from './CustomRoomTable'
 import { CreateRoomForm } from './CreateRoomForm'
+import { JoinByIdForm } from './JoinByIdForm'
 import { useAppSelector } from '../hooks'
 
 import phaserGame from '../PhaserGame'
@@ -169,6 +170,7 @@ export default function RoomSelectionDialog() {
                 </Title>
               </TitleWrapper>
               <CustomRoomTable />
+              <JoinByIdForm />
               <Button
                 variant="contained"
                 color="secondary"

@@ -1,10 +1,11 @@
+import { IncomingMessage } from 'http'
 import bcrypt from 'bcrypt'
 import { Room, Client, ServerError } from 'colyseus'
 import { Dispatcher } from '@colyseus/command'
 import { Player, OfficeState, Computer, Whiteboard } from './schema/OfficeState'
 import { Message } from '../../types/Messages'
-import { IRoomData } from '../../types/Rooms'
-import { whiteboardRoomIds } from './schema/OfficeState'
+import { IRoomData, RoomType } from '../../types/Rooms'
+import RateLimiter from './RateLimiter'
 import { computerBoxes, whiteboardBoxes, mapBounds, isWithinReach, ItemBox } from './MapObjects'
 import PlayerUpdateCommand from './commands/PlayerUpdateCommand'
 import PlayerUpdateNameCommand from './commands/PlayerUpdateNameCommand'
@@ -21,21 +22,43 @@ import ChatMessageUpdateCommand from './commands/ChatMessageUpdateCommand'
 const MAX_NAME_LENGTH = 32
 const MAX_CHAT_LENGTH = 500
 const MAX_ANIM_LENGTH = 64
+const MAX_ROOM_NAME_LENGTH = 64
+const MAX_ROOM_DESCRIPTION_LENGTH = 2000
+
+/** the client sends a position on every frame it moves, so ~60/s is normal */
+const MOVEMENT_PER_SECOND = 120
+const MOVEMENT_BURST = 240
+const CHAT_PER_SECOND = 0.5
+const CHAT_BURST = 5
+/** five quick tries at a room password, then one a minute */
+const PASSWORD_ATTEMPTS_PER_SECOND = 1 / 60
+const PASSWORD_ATTEMPT_BURST = 5
+
+/** best effort origin for throttling; Heroku and friends put the real ip here */
+function clientAddress(request?: IncomingMessage) {
+  const forwarded = request?.headers['x-forwarded-for']
+  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]
+  return first?.trim() || request?.socket?.remoteAddress || 'unknown'
+}
 
 export class SkyOffice extends Room<OfficeState> {
   private dispatcher = new Dispatcher(this)
   private name: string
   private description: string
   private password: string | null = null
+  private movementLimiter = new RateLimiter(MOVEMENT_BURST, MOVEMENT_PER_SECOND)
+  private chatLimiter = new RateLimiter(CHAT_BURST, CHAT_PER_SECOND)
+  private passwordLimiter = new RateLimiter(PASSWORD_ATTEMPT_BURST, PASSWORD_ATTEMPTS_PER_SECOND)
 
   async onCreate(options: IRoomData) {
-    const { name, description, password } = options
-    this.name = name
-    this.description = description
+    const { name, description, password, unlisted } = options
+    this.name = (name ?? '').slice(0, MAX_ROOM_NAME_LENGTH)
+    this.description = (description ?? '').slice(0, MAX_ROOM_DESCRIPTION_LENGTH)
 
-    // never let a client decide whether its room is eligible for cleanup - only
-    // the server-defined public lobby opts out of auto-disposal
-    this.autoDispose = true
+    // A client must not be able to keep a room resident forever by asking for
+    // it, so the option is ignored - only the public lobby, which the server
+    // defines itself, stays alive while empty.
+    this.autoDispose = this.roomName !== RoomType.PUBLIC
 
     let hasPassword = false
     if (password) {
@@ -43,7 +66,12 @@ export class SkyOffice extends Room<OfficeState> {
       this.password = await bcrypt.hash(password, salt)
       hasPassword = true
     }
-    this.setMetadata({ name, description, hasPassword })
+    // A password stops people joining, but the lobby listing still published
+    // the name, description and occupancy of every custom room. Unlisted rooms
+    // stay out of it and are reachable by id only.
+    if (unlisted) await this.setPrivate(true)
+
+    this.setMetadata({ name: this.name, description: this.description, hasPassword })
 
     this.setState(new OfficeState())
 
@@ -125,6 +153,7 @@ export class SkyOffice extends Room<OfficeState> {
         const y = this.readCoordinate(message?.y, mapBounds.height)
         if (x === null || y === null) return
         if (typeof message.anim !== 'string' || message.anim.length > MAX_ANIM_LENGTH) return
+        if (!this.movementLimiter.consume(client.sessionId)) return
 
         this.dispatcher.dispatch(new PlayerUpdateCommand(), { client, x, y, anim: message.anim })
       }
@@ -166,6 +195,7 @@ export class SkyOffice extends Room<OfficeState> {
     // when a player send a chat message, update the message array and broadcast to all connected clients except the sender
     this.onSafeMessage(Message.ADD_CHAT_MESSAGE, (client, message: { content: string }) => {
       if (typeof message?.content !== 'string') return
+      if (!this.chatLimiter.consume(client.sessionId)) return
 
       const content = message.content.slice(0, MAX_CHAT_LENGTH)
 
@@ -228,14 +258,26 @@ export class SkyOffice extends Room<OfficeState> {
     return isWithinReach(box, player.x, player.y)
   }
 
-  async onAuth(client: Client, options: { password: string | null }) {
+  async onAuth(client: Client, options: { password: string | null }, request?: IncomingMessage) {
     if (this.password) {
+      const origin = clientAddress(request)
+
+      // Checked before the compare: bcrypt at cost 10 is deliberately slow, so
+      // an unthrottled guessing loop is both a brute force and a cheap way to
+      // burn our CPU.
+      if (!this.passwordLimiter.check(origin)) {
+        throw new ServerError(429, 'Too many attempts, please try again later.')
+      }
+
       if (typeof options?.password !== 'string') {
+        this.passwordLimiter.consume(origin)
         throw new ServerError(403, 'Password is incorrect!')
       }
 
       const validPassword = await bcrypt.compare(options.password, this.password)
       if (!validPassword) {
+        // only a wrong guess costs allowance, so honest users are never limited
+        this.passwordLimiter.consume(origin)
         throw new ServerError(403, 'Password is incorrect!')
       }
     }
@@ -252,6 +294,9 @@ export class SkyOffice extends Room<OfficeState> {
   }
 
   onLeave(client: Client, consented: boolean) {
+    this.movementLimiter.forget(client.sessionId)
+    this.chatLimiter.forget(client.sessionId)
+
     if (this.state.players.has(client.sessionId)) {
       this.state.players.delete(client.sessionId)
     }
@@ -268,10 +313,6 @@ export class SkyOffice extends Room<OfficeState> {
   }
 
   onDispose() {
-    this.state.whiteboards.forEach((whiteboard) => {
-      if (whiteboardRoomIds.has(whiteboard.roomId)) whiteboardRoomIds.delete(whiteboard.roomId)
-    })
-
     console.log('room', this.roomId, 'disposing...')
     this.dispatcher.stop()
   }

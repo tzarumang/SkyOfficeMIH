@@ -4,6 +4,8 @@ import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import Checkbox from '@mui/material/Checkbox'
 import Visibility from '@mui/icons-material/Visibility'
 import VisibilityOff from '@mui/icons-material/VisibilityOff'
 
@@ -25,7 +27,7 @@ export const CreateRoomForm = () => {
     name: '',
     description: '',
     password: null,
-    autoDispose: true,
+    unlisted: false,
   })
   const [showPassword, setShowPassword] = useState(false)
   const [nameFieldEmpty, setNameFieldEmpty] = useState(false)
@@ -97,6 +99,17 @@ export const CreateRoomForm = () => {
           ),
         }}
       />
+      <FormControlLabel
+        control={
+          <Checkbox
+            color="secondary"
+            checked={values.unlisted}
+            onChange={(event) => setValues({ ...values, unlisted: event.target.checked })}
+          />
+        }
+        label="Unlisted - only people with the room ID can find it"
+      />
+
       <Button variant="contained" color="secondary" type="submit">
         Create
       </Button>

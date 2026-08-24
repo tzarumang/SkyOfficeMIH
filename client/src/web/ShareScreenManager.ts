@@ -3,6 +3,8 @@ import store from '../stores'
 import { setMyStream, addVideoStream, removeVideoStream } from '../stores/ComputerStore'
 import phaserGame from '../PhaserGame'
 import Game from '../scenes/Game'
+import { peerOptions } from './peerConfig'
+import { toScreenSharePeerId } from '../util'
 
 export default class ShareScreenManager {
   private myPeer: Peer
@@ -11,8 +13,8 @@ export default class ShareScreenManager {
   private allowedPeers = new Set<string>()
 
   constructor(private userId: string) {
-    const sanatizedId = this.makeId(userId)
-    this.myPeer = new Peer(sanatizedId)
+    const sanatizedId = toScreenSharePeerId(userId)
+    this.myPeer = new Peer(sanatizedId, peerOptions())
     this.myPeer.on('error', (err) => {
       console.log('ShareScreenWebRTC err.type', err.type)
       console.error('ShareScreenWebRTC', err)
@@ -47,7 +49,7 @@ export default class ShareScreenManager {
     const computerItem = game.computerMap.get(computerId)
     if (computerItem) {
       for (const userId of computerItem.currentUsers) {
-        this.allowedPeers.add(this.makeId(userId))
+        this.allowedPeers.add(toScreenSharePeerId(userId))
       }
     }
   }
@@ -58,12 +60,6 @@ export default class ShareScreenManager {
     this.myPeer.disconnect()
   }
 
-  // PeerJS throws invalid_id error if it contains some characters such as that colyseus generates.
-  // https://peerjs.com/docs.html#peer-id
-  // Also for screen sharing ID add a `-ss` at the end.
-  private makeId(id: string) {
-    return `${id.replace(/[^0-9a-z]/gi, 'G')}-ss`
-  }
 
   startScreenShare() {
     // @ts-ignore
@@ -113,7 +109,7 @@ export default class ShareScreenManager {
   onUserJoined(userId: string) {
     if (userId === this.userId) return
 
-    const sanatizedId = this.makeId(userId)
+    const sanatizedId = toScreenSharePeerId(userId)
     this.allowedPeers.add(sanatizedId)
 
     if (!this.myStream) return
@@ -123,7 +119,7 @@ export default class ShareScreenManager {
   onUserLeft(userId: string) {
     if (userId === this.userId) return
 
-    const sanatizedId = this.makeId(userId)
+    const sanatizedId = toScreenSharePeerId(userId)
     this.allowedPeers.delete(sanatizedId)
     store.dispatch(removeVideoStream(sanatizedId))
   }

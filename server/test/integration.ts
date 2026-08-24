@@ -1,0 +1,182 @@
+/**
+ * Boots a real server in-process and drives it with a real client. Covers the
+ * things a client should not be able to do - the findings from the security
+ * audit - so they cannot quietly come back.
+ *
+ * Run with: yarn test
+ */
+process.env.PORT = process.env.TEST_PORT || '2599'
+
+require('../index')
+
+import { Client } from 'colyseus.js'
+import { Message } from '../../types/Messages'
+import { computerBoxes } from '../rooms/MapObjects'
+import RateLimiter from '../rooms/RateLimiter'
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const endpoint = `ws://localhost:${process.env.PORT}`
+
+let failures = 0
+function check(label: string, actual: unknown, expected: unknown) {
+  const ok = JSON.stringify(actual) === JSON.stringify(expected)
+  if (!ok) failures++
+  console.log(
+    `${ok ? '  ok  ' : ' FAIL '} ${label}` +
+      (ok ? '' : `\n         got ${JSON.stringify(actual)}, want ${JSON.stringify(expected)}`)
+  )
+}
+
+function rateLimiterUnits() {
+  console.log('\nRateLimiter')
+  const limiter = new RateLimiter(5, 1)
+
+  let allowed = 0
+  for (let i = 0; i < 20; i++) if (limiter.consume('a', 1000)) allowed++
+  check('a burst is capped at the bucket capacity', allowed, 5)
+  check('allowance comes back over time', limiter.consume('a', 3000), true)
+  check('keys are independent', limiter.consume('b', 1000), true)
+  check('check() does not spend allowance', [limiter.check('c', 0), limiter.consume('c', 0)], [true, true])
+}
+
+async function roomTests() {
+  const client = new Client(endpoint)
+
+  console.log('\nMalformed messages')
+  const room = await client.joinOrCreate('skyoffice')
+  await sleep(300)
+
+  room.send(Message.STOP_SCREEN_SHARE, { computerId: '999' })
+  room.send(Message.DISCONNECT_FROM_COMPUTER, { computerId: '999' })
+  room.send(Message.DISCONNECT_FROM_WHITEBOARD, { whiteboardId: 'nope' })
+  room.send(Message.CONNECT_TO_COMPUTER, { computerId: { evil: true } })
+  room.send(Message.STOP_SCREEN_SHARE, null)
+  room.send(Message.UPDATE_PLAYER, { x: 'NaN', y: null, anim: 7 })
+  await sleep(300)
+  room.send(Message.UPDATE_PLAYER_NAME, { name: 'still-alive' })
+  await sleep(400)
+  check(
+    'an unknown item id does not take the room down',
+    (room.state as any).players.get(room.sessionId).name,
+    'still-alive'
+  )
+
+  console.log('\nItem proximity')
+  const near = computerBoxes[0]
+  const far = computerBoxes[3]
+  const connectedTo = (id: string) => (room.state as any).computers.get(id)?.connectedUser.size
+
+  room.send(Message.UPDATE_PLAYER, { x: far.x, y: far.y, anim: 'adam_idle_down' })
+  await sleep(250)
+  room.send(Message.CONNECT_TO_COMPUTER, { computerId: '0' })
+  await sleep(350)
+  check('a computer across the room is refused', connectedTo('0'), 0)
+
+  room.send(Message.UPDATE_PLAYER, { x: near.x, y: near.y, anim: 'adam_idle_down' })
+  await sleep(250)
+  room.send(Message.CONNECT_TO_COMPUTER, { computerId: '0' })
+  await sleep(350)
+  check('the computer being stood at is allowed', connectedTo('0'), 1)
+
+  console.log('\nInput limits')
+  room.send(Message.UPDATE_PLAYER, { x: 999999, y: 999999, anim: 'adam_idle_down' })
+  await sleep(250)
+  check('a position outside the map is dropped', (room.state as any).players.get(room.sessionId).x, near.x)
+
+  room.send(Message.UPDATE_PLAYER_NAME, { name: 'x'.repeat(5000) })
+  await sleep(300)
+  check('player name is capped', (room.state as any).players.get(room.sessionId).name.length, 32)
+
+  const before = (room.state as any).chatMessages.length
+  for (let i = 0; i < 25; i++) room.send(Message.ADD_CHAT_MESSAGE, { content: `flood ${i}` })
+  await sleep(700)
+  const stored = (room.state as any).chatMessages.length - before
+  check('a chat flood is cut to the burst size', stored >= 5 && stored <= 8, true)
+
+  console.log('\nWhiteboard ids')
+  const ids = [...(room.state as any).whiteboards.values()].map((w: any) => w.roomId)
+  check('are 128 bits of base64url', ids.every((id: string) => /^[A-Za-z0-9_-]{22}$/.test(id)), true)
+  check('are all distinct', new Set(ids).size, ids.length)
+
+  const publicId = room.id
+  await room.leave()
+
+  console.log('\nRoom lifetime')
+  await sleep(700)
+  const publicAgain = await client.joinOrCreate('skyoffice')
+  check('the public lobby survives being empty', publicAgain.id, publicId)
+  await publicAgain.leave()
+
+  const temp = await client.create('custom', { name: 'temp', description: 'temp', password: null, unlisted: false })
+  const tempId = temp.id
+  await temp.leave()
+  await sleep(900)
+  let disposed = false
+  try {
+    await client.joinById(tempId)
+  } catch {
+    disposed = true
+  }
+  check('a custom room is disposed once empty', disposed, true)
+
+  console.log('\nRoom creation')
+  const big = await client.create('custom', {
+    name: 'n'.repeat(500),
+    description: 'd'.repeat(9000),
+    password: null,
+    unlisted: false,
+  })
+  await sleep(300)
+  const listed = (await client.getAvailableRooms('custom')).find((r) => r.roomId === big.id)
+  check('room name is capped', (listed?.metadata as any)?.name.length, 64)
+  check('room description is capped', (listed?.metadata as any)?.description.length, 2000)
+  await big.leave()
+
+  const hidden = await client.create('custom', {
+    name: 'hidden',
+    description: 'hidden',
+    password: null,
+    unlisted: true,
+  })
+  await sleep(400)
+  const rooms = await client.getAvailableRooms('custom')
+  check('an unlisted room is not listed', rooms.some((r) => r.roomId === hidden.id), false)
+  const rejoined = await client.joinById(hidden.id)
+  check('an unlisted room is still joinable by id', rejoined.id, hidden.id)
+  await rejoined.leave()
+  await hidden.leave()
+
+  console.log('\nRoom passwords')
+  const locked = await client.create('custom', {
+    name: 'private',
+    description: 'p',
+    password: 'correct-horse',
+    unlisted: false,
+  })
+  await sleep(300)
+  const codes: number[] = []
+  for (let i = 0; i < 7; i++) {
+    try {
+      await client.joinById(locked.id, { password: `wrong-${i}` })
+    } catch (error: any) {
+      codes.push(error.code)
+    }
+  }
+  check('wrong passwords are rejected', codes.slice(0, 5).every((code) => code === 403), true)
+  check('guessing is throttled after the burst', codes.slice(5).every((code) => code === 429), true)
+  await locked.leave()
+}
+
+async function main() {
+  rateLimiterUnits()
+  await sleep(700)
+  await roomTests()
+
+  console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`)
+  process.exit(failures === 0 ? 0 : 1)
+}
+
+main().catch((error) => {
+  console.error(error)
+  process.exit(1)
+})

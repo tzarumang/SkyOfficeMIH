@@ -79,12 +79,12 @@ export default class Network {
 
   // method to create a custom room
   async createCustom(roomData: IRoomData) {
-    const { name, description, password, autoDispose } = roomData
+    const { name, description, password, unlisted } = roomData
     this.room = await this.client.create(RoomType.CUSTOM, {
       name,
       description,
       password,
-      autoDispose,
+      unlisted,
     })
     this.initialize()
   }
