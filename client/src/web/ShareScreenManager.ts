@@ -3,6 +3,7 @@ import store from '../stores'
 import { setMyStream, addVideoStream, removeVideoStream } from '../stores/ComputerStore'
 import phaserGame from '../PhaserGame'
 import Game from '../scenes/Game'
+import { peerOptions } from './peerConfig'
 
 export default class ShareScreenManager {
   private myPeer: Peer
@@ -12,7 +13,7 @@ export default class ShareScreenManager {
 
   constructor(private userId: string) {
     const sanatizedId = this.makeId(userId)
-    this.myPeer = new Peer(sanatizedId)
+    this.myPeer = new Peer(sanatizedId, peerOptions())
     this.myPeer.on('error', (err) => {
       console.log('ShareScreenWebRTC err.type', err.type)
       console.error('ShareScreenWebRTC', err)
