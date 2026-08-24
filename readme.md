@@ -114,10 +114,17 @@ The client reads these at build time:
 ## Development
 
 ```bash
-yarn test        # boots a server in-process and drives it with a real client
+yarn test           # boots a server in-process and drives it with a real client
+yarn audit:check    # fails only on advisories missing from .audit-baseline.json
+yarn audit:update   # re-record the baseline after upgrading or accepting one
 ```
 
-CI runs a typecheck, a client build and this suite on every pull request.
+CI runs a typecheck, a client build, the test suite and the audit check on every
+pull request.
+
+`.audit-baseline.json` records the advisories we already know about, so a newly
+published one fails the build while the accepted backlog does not. When you fix or
+accept one, run `yarn audit:update` and commit the diff.
 
 ## Credits 🎉
 
