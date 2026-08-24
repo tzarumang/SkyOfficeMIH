@@ -3,6 +3,9 @@ import Network from '../services/Network'
 import store from '../stores'
 import { setVideoConnected } from '../stores/UserStore'
 
+/** how long a peer stays callable after we last saw it next to us */
+const ALLOW_WINDOW_MS = 10000
+
 export default class WebRTC {
   private myPeer: Peer
   private peers = new Map<string, { call: Peer.MediaConnection; video: HTMLVideoElement }>()
@@ -12,6 +15,8 @@ export default class WebRTC {
   private myVideo = document.createElement('video')
   private myStream?: MediaStream
   private network: Network
+  /** peers we are currently close enough to talk to -> when that expires */
+  private allowedPeers = new Map<string, number>()
 
   constructor(userId: string, network: Network) {
     const sanitizedId = this.replaceInvalidId(userId)
@@ -37,8 +42,40 @@ export default class WebRTC {
     return userId.replace(/[^0-9a-z]/gi, 'G')
   }
 
+  /**
+   * Proximity is what authorizes a call, so the game tells us who is currently
+   * close enough. The short window past the last overlap keeps a call that is
+   * already in flight from being rejected when the two players drift apart
+   * while the signalling round trip is still going.
+   */
+  allowPeer(userId: string) {
+    this.allowedPeers.set(this.replaceInvalidId(userId), Date.now() + ALLOW_WINDOW_MS)
+  }
+
+  private isPeerAllowed(peerId: string) {
+    const expiresAt = this.allowedPeers.get(peerId)
+    if (expiresAt === undefined) return false
+
+    if (expiresAt < Date.now()) {
+      this.allowedPeers.delete(peerId)
+      return false
+    }
+
+    return true
+  }
+
   initialize() {
     this.myPeer.on('call', (call) => {
+      // Peer ids are Colyseus session ids, which every client in the room can
+      // read out of room state - and the PeerJS broker is shared with the
+      // whole internet. Without this check, answering would hand our camera
+      // and microphone to anyone who knows or guesses an id.
+      if (!this.isPeerAllowed(call.peer)) {
+        console.warn('rejected call from peer that is not nearby:', call.peer)
+        call.close()
+        return
+      }
+
       if (!this.onCalledPeers.has(call.peer)) {
         call.answer(this.myStream)
         const video = document.createElement('video')
@@ -111,6 +148,7 @@ export default class WebRTC {
   // method to remove video stream (when we are the host of the call)
   deleteVideoStream(userId: string) {
     const sanitizedId = this.replaceInvalidId(userId)
+    this.allowedPeers.delete(sanitizedId)
     if (this.peers.has(sanitizedId)) {
       const peer = this.peers.get(sanitizedId)
       peer?.call.close()
@@ -122,6 +160,7 @@ export default class WebRTC {
   // method to remove video stream (when we are the guest of the call)
   deleteOnCalledVideoStream(userId: string) {
     const sanitizedId = this.replaceInvalidId(userId)
+    this.allowedPeers.delete(sanitizedId)
     if (this.onCalledPeers.has(sanitizedId)) {
       const onCalledPeer = this.onCalledPeers.get(sanitizedId)
       onCalledPeer?.call.close()

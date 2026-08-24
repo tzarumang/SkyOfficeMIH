@@ -40,7 +40,7 @@ export const computerSlice = createSlice({
       }
       const game = phaserGame.scene.keys.game as Game
       game.disableKeys()
-      state.shareScreenManager.onOpen()
+      state.shareScreenManager.onOpen(action.payload.computerId)
       state.computerDialogOpen = true
       state.computerId = action.payload.computerId
     },

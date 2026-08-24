@@ -92,6 +92,19 @@ cd SkyOffice/client or 'my-folder-name/client'
 yarn && yarn dev
 ```
 
+## Server configuration
+
+The server reads these environment variables. All are optional in development;
+the first two matter for any deployment reachable from the internet.
+
+| Variable | Purpose |
+| --- | --- |
+| `ALLOWED_ORIGINS` | Comma-separated origins allowed to reach the matchmaking API, e.g. `https://skyoffice.netlify.app`. Unset means any origin is accepted. |
+| `COLYSEUS_MONITOR_USER` / `COLYSEUS_MONITOR_PASSWORD` | Credentials for the `/colyseus` monitor dashboard. The monitor can read every room's state and disconnect clients, so it is only mounted when both are set. With `NODE_ENV=production` and no credentials, it is not mounted at all. |
+| `PORT` | Port to listen on (default `2567`). |
+
+The client needs `VITE_SERVER_URL` set to the server's URL for production builds.
+
 ## Credits 🎉
 
 Big thanks to this great repo - [ourcade/phaser3-typescript-parcel-template](https://github.com/ourcade/phaser3-typescript-parcel-template)
