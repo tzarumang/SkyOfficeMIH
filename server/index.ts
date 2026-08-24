@@ -58,7 +58,7 @@ gameServer.define(RoomType.PUBLIC, SkyOffice, {
   name: 'Public Lobby',
   description: 'For making friends and familiarizing yourself with the controls',
   password: null,
-  autoDispose: false,
+  unlisted: false,
 })
 gameServer.define(RoomType.CUSTOM, SkyOffice).enableRealtimeListing()
 

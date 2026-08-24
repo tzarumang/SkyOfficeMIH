@@ -51,7 +51,7 @@ export class SkyOffice extends Room<OfficeState> {
   private passwordLimiter = new RateLimiter(PASSWORD_ATTEMPT_BURST, PASSWORD_ATTEMPTS_PER_SECOND)
 
   async onCreate(options: IRoomData) {
-    const { name, description, password } = options
+    const { name, description, password, unlisted } = options
     this.name = (name ?? '').slice(0, MAX_ROOM_NAME_LENGTH)
     this.description = (description ?? '').slice(0, MAX_ROOM_DESCRIPTION_LENGTH)
 
@@ -66,6 +66,11 @@ export class SkyOffice extends Room<OfficeState> {
       this.password = await bcrypt.hash(password, salt)
       hasPassword = true
     }
+    // A password stops people joining, but the lobby listing still published
+    // the name, description and occupancy of every custom room. Unlisted rooms
+    // stay out of it and are reachable by id only.
+    if (unlisted) await this.setPrivate(true)
+
     this.setMetadata({ name: this.name, description: this.description, hasPassword })
 
     this.setState(new OfficeState())

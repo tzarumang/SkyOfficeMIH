@@ -3,7 +3,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import ShareScreenManager from '../web/ShareScreenManager'
 import phaserGame from '../PhaserGame'
 import Game from '../scenes/Game'
-import { sanitizeId } from '../util'
+import { basePeerId } from '../util'
 
 interface ComputerState {
   computerDialogOpen: boolean
@@ -65,13 +65,13 @@ export const computerSlice = createSlice({
       state,
       action: PayloadAction<{ id: string; call: MediaConnection; stream: MediaStream }>
     ) => {
-      state.peerStreams.set(sanitizeId(action.payload.id), {
+      state.peerStreams.set(basePeerId(action.payload.id), {
         call: action.payload.call,
         stream: action.payload.stream,
       })
     },
     removeVideoStream: (state, action: PayloadAction<string>) => {
-      state.peerStreams.delete(sanitizeId(action.payload))
+      state.peerStreams.delete(basePeerId(action.payload))
     },
   },
 })

@@ -111,6 +111,14 @@ The client reads these at build time:
 | `VITE_PEER_HOST` | Host of a self-hosted [PeerServer](https://github.com/peers/peerjs-server). Unset, PeerJS uses its free public broker - signalling metadata leaves your infrastructure, availability depends on a service you do not run, and peer ids share a namespace with every other app using the default. |
 | `VITE_PEER_PORT` / `VITE_PEER_PATH` / `VITE_PEER_SECURE` | Optional details for the above. Default to the host's own port, `/`, and TLS on. |
 
+## Development
+
+```bash
+yarn test        # boots a server in-process and drives it with a real client
+```
+
+CI runs a typecheck, a client build and this suite on every pull request.
+
 ## Credits 🎉
 
 Big thanks to this great repo - [ourcade/phaser3-typescript-parcel-template](https://github.com/ourcade/phaser3-typescript-parcel-template)

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: yarn
+
+      - name: Install server dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install shared types
+        run: yarn install --frozen-lockfile
+        working-directory: types
+
+      - name: Install client dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: client
+
+      - name: Typecheck server
+        run: yarn tsc --project server/tsconfig.server.json --noEmit
+
+      - name: Build client
+        run: yarn build
+        working-directory: client
+
+      - name: Test
+        run: yarn test
+
+  audit:
+    runs-on: ubuntu-latest
+    # Reports without blocking. New advisories land without us changing
+    # anything, and the ones outstanding today are transitive through
+    # colyseus 0.14 (an unused mongoose driver, the monitor http client) and
+    # bcrypt build tooling - none reachable at runtime, and clearing them
+    # means a colyseus major upgrade.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: yarn audit --level high --groups dependencies
