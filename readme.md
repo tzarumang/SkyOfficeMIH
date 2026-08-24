@@ -103,7 +103,13 @@ the first two matter for any deployment reachable from the internet.
 | `COLYSEUS_MONITOR_USER` / `COLYSEUS_MONITOR_PASSWORD` | Credentials for the `/colyseus` monitor dashboard. The monitor can read every room's state and disconnect clients, so it is only mounted when both are set. With `NODE_ENV=production` and no credentials, it is not mounted at all. |
 | `PORT` | Port to listen on (default `2567`). |
 
-The client needs `VITE_SERVER_URL` set to the server's URL for production builds.
+The client reads these at build time:
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_SERVER_URL` | URL of the Colyseus server. Required for production builds. |
+| `VITE_PEER_HOST` | Host of a self-hosted [PeerServer](https://github.com/peers/peerjs-server). Unset, PeerJS uses its free public broker - signalling metadata leaves your infrastructure, availability depends on a service you do not run, and peer ids share a namespace with every other app using the default. |
+| `VITE_PEER_PORT` / `VITE_PEER_PATH` / `VITE_PEER_SECURE` | Optional details for the above. Default to the host's own port, `/`, and TLS on. |
 
 ## Credits 🎉
 
