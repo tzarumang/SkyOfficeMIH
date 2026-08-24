@@ -7,6 +7,8 @@ import Game from '../scenes/Game'
 export default class ShareScreenManager {
   private myPeer: Peer
   myStream?: MediaStream
+  /** screen-share peer ids of the users currently at the same computer */
+  private allowedPeers = new Set<string>()
 
   constructor(private userId: string) {
     const sanatizedId = this.makeId(userId)
@@ -17,6 +19,14 @@ export default class ShareScreenManager {
     })
 
     this.myPeer.on('call', (call) => {
+      // only the users the server placed at this computer may push a stream
+      // into our dialog
+      if (!this.allowedPeers.has(call.peer)) {
+        console.warn('rejected screen share from peer that is not at this computer:', call.peer)
+        call.close()
+        return
+      }
+
       call.answer()
 
       call.on('stream', (userVideoStream) => {
@@ -26,14 +36,25 @@ export default class ShareScreenManager {
     })
   }
 
-  onOpen() {
+  onOpen(computerId: string) {
     if (this.myPeer.disconnected) {
       this.myPeer.reconnect()
+    }
+
+    // whoever is already at this computer joined before our dialog opened, so
+    // they never came through onUserJoined - accept their share too
+    const game = phaserGame.scene.keys.game as Game
+    const computerItem = game.computerMap.get(computerId)
+    if (computerItem) {
+      for (const userId of computerItem.currentUsers) {
+        this.allowedPeers.add(this.makeId(userId))
+      }
     }
   }
 
   onClose() {
     this.stopScreenShare(false)
+    this.allowedPeers.clear()
     this.myPeer.disconnect()
   }
 
@@ -90,9 +111,12 @@ export default class ShareScreenManager {
   }
 
   onUserJoined(userId: string) {
-    if (!this.myStream || userId === this.userId) return
+    if (userId === this.userId) return
 
     const sanatizedId = this.makeId(userId)
+    this.allowedPeers.add(sanatizedId)
+
+    if (!this.myStream) return
     this.myPeer.call(sanatizedId, this.myStream)
   }
 
@@ -100,6 +124,7 @@ export default class ShareScreenManager {
     if (userId === this.userId) return
 
     const sanatizedId = this.makeId(userId)
+    this.allowedPeers.delete(sanatizedId)
     store.dispatch(removeVideoStream(sanatizedId))
   }
 }

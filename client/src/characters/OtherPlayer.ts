@@ -32,6 +32,12 @@ export default class OtherPlayer extends Player {
   makeCall(myPlayer: MyPlayer, webRTC: WebRTC) {
     this.myPlayer = myPlayer
     const myPlayerId = myPlayer.playerId
+
+    // Only one side places the call, but both sides overlap - so both record
+    // the other as nearby. That is what lets the callee tell an expected call
+    // apart from a stranger who simply knows the peer id.
+    webRTC.allowPeer(this.playerId)
+
     if (
       !this.connected &&
       this.connectionBufferTime >= 750 &&
