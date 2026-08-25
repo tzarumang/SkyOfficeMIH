@@ -92,6 +92,52 @@ cd SkyOffice/client or 'my-folder-name/client'
 yarn && yarn dev
 ```
 
+## Deployment
+
+The stack runs as three containers and is meant to be deployed as a Portainer
+stack pointed at this repository.
+
+| Service | What it is | Default published port |
+| --- | --- | --- |
+| `client` | the built app, served by nginx | 8080 |
+| `server` | the Colyseus game server | 2567 |
+| `peerjs` | self-hosted WebRTC signalling | 9000 |
+
+In Portainer: **Stacks → Add stack → Repository**, point it at this repo with
+`docker-compose.yml` as the compose path, then fill in the environment
+variables below. Locally, `cp .env.example .env && docker compose up --build`
+does the same thing.
+
+### Environment
+
+Every URL here is what the **browser** is told to connect to, so it has to be
+reachable from wherever people open the app. Container names will not work.
+
+| Variable | Purpose |
+| --- | --- |
+| `SERVER_URL` | `ws://` or `wss://` URL of the `server` service. Leave empty and the client looks for a server on its own hostname at port 2567. |
+| `PEER_HOST` | Hostname of the `peerjs` service. Leave empty and the client falls back to the free public PeerJS broker, which puts call metadata on a third party. |
+| `PEER_PORT` / `PEER_PATH` / `PEER_SECURE` | Details for the above. Set `PEER_SECURE=false` when reaching it over plain http. |
+| `ALLOWED_ORIGINS` | Comma-separated origins allowed to reach the matchmaking API, e.g. `https://office.example.com`. Unset means any origin is accepted. |
+| `COLYSEUS_MONITOR_USER` / `COLYSEUS_MONITOR_PASSWORD` | Credentials for the `/colyseus` dashboard, which reads every room's state and can disconnect clients. **It is not mounted at all unless both are set.** |
+| `CLIENT_PORT` / `SERVER_PORT` / `PEER_PUBLIC_PORT` | Host ports to publish on. |
+
+`.env.example` has worked examples for both a reverse-proxied setup and a bare
+host.
+
+### Why the client is configured at runtime
+
+Vite inlines `VITE_*` values at build time, so a plain build would need a new
+image for every deployment. The client image writes `/config.js` from its
+environment when the container starts instead, which means the same image can
+be pointed anywhere by changing the stack settings and restarting. Build-time
+`VITE_*` values still work as a fallback, so `yarn dev` is unaffected.
+
+### Health checks
+
+The server exposes `GET /health`, and both images declare a `HEALTHCHECK`, so
+Portainer shows container health directly.
+
 ## Server configuration
 
 The server reads these environment variables. All are optional in development;
@@ -99,7 +145,7 @@ the first two matter for any deployment reachable from the internet.
 
 | Variable | Purpose |
 | --- | --- |
-| `ALLOWED_ORIGINS` | Comma-separated origins allowed to reach the matchmaking API, e.g. `https://skyoffice.netlify.app`. Unset means any origin is accepted. |
+| `ALLOWED_ORIGINS` | Comma-separated origins allowed to reach the matchmaking API, e.g. `https://office.example.com`. Unset means any origin is accepted. |
 | `COLYSEUS_MONITOR_USER` / `COLYSEUS_MONITOR_PASSWORD` | Credentials for the `/colyseus` monitor dashboard. The monitor can read every room's state and disconnect clients, so it is only mounted when both are set. With `NODE_ENV=production` and no credentials, it is not mounted at all. |
 | `PORT` | Port to listen on (default `2567`). |
 

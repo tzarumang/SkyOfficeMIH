@@ -5,7 +5,8 @@
   "main": ".eslintrc.js",
   "scripts": {
     "start": "cd server && ts-node-dev --project tsconfig.server.json --respawn --transpile-only index.ts",
-    "heroku-postbuild": "yarn && cd types && yarn && cd ../server && tsc --project tsconfig.server.json",
+    "build": "tsc --project server/tsconfig.server.json",
+    "start:prod": "node server/lib/server/index.js",
     "test": "ts-node --project server/tsconfig.server.json server/test/integration.ts",
     "audit:check": "node scripts/audit.js",
     "audit:update": "node scripts/audit.js --update"

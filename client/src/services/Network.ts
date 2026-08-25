@@ -20,6 +20,7 @@ import {
   pushPlayerLeftMessage,
 } from '../stores/ChatStore'
 import { setWhiteboardUrls } from '../stores/WhiteboardStore'
+import { serverUrl } from '../runtimeConfig'
 
 export default class Network {
   private client: Client
@@ -31,10 +32,9 @@ export default class Network {
 
   constructor() {
     const protocol = window.location.protocol.replace('http', 'ws')
-    const endpoint =
-      process.env.NODE_ENV === 'production'
-        ? import.meta.env.VITE_SERVER_URL
-        : `${protocol}//${window.location.hostname}:2567`
+    // configured at container start, at build time, or fall back to a server
+    // on the same host - which is what `yarn dev` wants
+    const endpoint = serverUrl() || `${protocol}//${window.location.hostname}:2567`
     this.client = new Client(endpoint)
     this.joinLobbyRoom().then(() => {
       store.dispatch(setLobbyJoined(true))

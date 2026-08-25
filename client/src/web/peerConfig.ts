@@ -1,4 +1,5 @@
 import { PeerOptions } from 'peerjs'
+import { peerHost, peerPath, peerPort, peerSecure } from '../runtimeConfig'
 
 /**
  * With no options PeerJS uses its free public broker, which means signalling
@@ -10,16 +11,16 @@ import { PeerOptions } from 'peerjs'
  * behaviour is unchanged.
  */
 export function peerOptions(): PeerOptions | undefined {
-  const host = import.meta.env.VITE_PEER_HOST
+  const host = peerHost()
 
   if (!host) return undefined
 
-  const port = Number(import.meta.env.VITE_PEER_PORT)
-  const secure = import.meta.env.VITE_PEER_SECURE !== 'false'
+  const port = Number(peerPort())
+  const secure = peerSecure() !== 'false'
 
   return {
     host,
-    path: import.meta.env.VITE_PEER_PATH || '/',
+    path: peerPath() || '/',
     secure,
     ...(Number.isFinite(port) && port > 0 ? { port } : {}),
   }
