@@ -31,9 +31,9 @@ const Wrapper = styled.div`
   }
 `
 
-export function ShareLinkPanel({ roomId }: { roomId: string }) {
+export function ShareLinkPanel({ roomId, slug }: { roomId: string; slug: string | null }) {
   const [copied, setCopied] = useState(false)
-  const link = buildShareLink(roomId)
+  const link = buildShareLink(roomId, slug)
 
   const copy = async () => {
     try {

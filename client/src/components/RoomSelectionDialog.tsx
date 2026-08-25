@@ -12,7 +12,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 
 import { CustomRoomTable } from './CustomRoomTable'
 import { InviteJoin } from './InviteJoin'
-import { roomIdFromUrl, forgetShareLink } from '../shareLink'
+import { inviteFromUrl, forgetShareLink } from '../shareLink'
 import { CreateRoomForm } from './CreateRoomForm'
 import { JoinByIdForm } from './JoinByIdForm'
 import { useAppSelector } from '../hooks'
@@ -106,7 +106,7 @@ const ProgressBar = styled(LinearProgress)`
 
 export default function RoomSelectionDialog() {
   // captured once, so dismissing the invite does not immediately re-trigger it
-  const [invitedTo, setInvitedTo] = useState(roomIdFromUrl)
+  const [invitedTo, setInvitedTo] = useState(inviteFromUrl)
   const [showCustomRoom, setShowCustomRoom] = useState(false)
   const [showCreateRoomForm, setShowCreateRoomForm] = useState(false)
   const [showSnackbar, setShowSnackbar] = useState(false)
@@ -147,7 +147,7 @@ export default function RoomSelectionDialog() {
         <Wrapper>
           {invitedTo ? (
             <InviteJoin
-              roomId={invitedTo}
+              invite={invitedTo}
               onGiveUp={() => {
                 forgetShareLink()
                 setInvitedTo(null)

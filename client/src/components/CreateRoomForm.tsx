@@ -6,10 +6,13 @@ import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Checkbox from '@mui/material/Checkbox'
+import TextFieldMui from '@mui/material/TextField'
+import MenuItem from '@mui/material/MenuItem'
 import Visibility from '@mui/icons-material/Visibility'
 import VisibilityOff from '@mui/icons-material/VisibilityOff'
 
-import { IRoomData } from '../../../types/Rooms'
+import { IRoomData, OFFICE_LIFETIMES } from '../../../types/Rooms'
+import { newOfficeSlug } from '../shareLink'
 import { useAppSelector } from '../hooks'
 
 import phaserGame from '../PhaserGame'
@@ -29,6 +32,8 @@ export const CreateRoomForm = () => {
     password: null,
     unlisted: false,
   })
+  // 0 means the office closes when everyone leaves and its link dies with it
+  const [lifetimeDays, setLifetimeDays] = useState(0)
   const [showPassword, setShowPassword] = useState(false)
   const [nameFieldEmpty, setNameFieldEmpty] = useState(false)
   const [descriptionFieldEmpty, setDescriptionFieldEmpty] = useState(false)
@@ -50,8 +55,12 @@ export const CreateRoomForm = () => {
     // create custom room if name and description are not empty
     if (isValidName && isValidDescription && lobbyJoined) {
       const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
+      // an office that should outlive the room needs a stable id to be found by
+      const room: IRoomData =
+        lifetimeDays > 0 ? { ...values, slug: newOfficeSlug(), lifetimeDays } : values
+
       bootstrap.network
-        .createCustom(values)
+        .createCustom(room)
         .then(() => bootstrap.launchGame())
         .catch((error) => console.error(error))
     }
@@ -99,6 +108,26 @@ export const CreateRoomForm = () => {
           ),
         }}
       />
+      <TextFieldMui
+        select
+        label="Keep this office"
+        variant="outlined"
+        color="secondary"
+        value={lifetimeDays}
+        onChange={(event) => setLifetimeDays(Number(event.target.value))}
+        helperText={
+          lifetimeDays > 0
+            ? 'Its link keeps working for that long, even when nobody is inside.'
+            : 'The office and its link close once everyone leaves.'
+        }
+      >
+        {OFFICE_LIFETIMES.map((option) => (
+          <MenuItem key={option.days} value={option.days}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextFieldMui>
+
       <FormControlLabel
         control={
           <Checkbox
