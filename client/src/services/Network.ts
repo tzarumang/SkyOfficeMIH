@@ -175,9 +175,7 @@ export default class Network {
 
           // when a new player finished setting up player name
           if (field === 'name' && value !== '') {
-            phaserEvents.emit(Event.PLAYER_JOINED, player, key)
-            store.dispatch(setPlayerNameMap({ id: key, name: value }))
-            store.dispatch(pushPlayerJoinedMessage(value))
+            this.announcePlayer(player, key, { arriving: true })
           }
         })
       }
@@ -269,6 +267,68 @@ export default class Network {
   }
 
   // method to register event listener and call back function when a player joined
+  /**
+   * Everyone already in the office, for a scene that started after they were
+   * announced.
+   *
+   * A player is announced as the first state update is decoded, which happens
+   * the moment the room is joined. A scene that has to fetch its office over
+   * http before it can start is not listening yet, and the announcement is not
+   * repeated - so without this, whoever arrives last sees an empty room while
+   * everybody already in it sees them arrive.
+   *
+   * Anyone still choosing a name is skipped: they have no name yet, and the
+   * event that carries it will arrive normally.
+   */
+  /**
+   * Tells everything that cares that a player is in the office.
+   *
+   * One path for somebody walking in and somebody who was already standing
+   * there, so the two cannot drift apart. `arriving` is the only difference:
+   * a player already here did not just arrive, and saying so in the chat would
+   * be a lie.
+   */
+  private announcePlayer(player: IPlayer, id: string, options: { arriving: boolean }) {
+    phaserEvents.emit(Event.PLAYER_JOINED, player, id)
+    store.dispatch(setPlayerNameMap({ id, name: player.name }))
+    if (options.arriving) store.dispatch(pushPlayerJoinedMessage(player.name))
+  }
+
+  /**
+   * Announces everyone already in the office, and everyone already sitting at
+   * something, to whoever has just started listening.
+   *
+   * All of that is announced as the first state update is decoded, which
+   * happens the moment the room is joined. A scene that has to fetch its
+   * office over http before it can start is not listening yet, and none of it
+   * is repeated - so without this the last person in sees an empty room while
+   * everybody already in it watches them arrive.
+   *
+   * Anyone still choosing a name is skipped; the event carrying it arrives
+   * normally.
+   */
+  replayWhoIsHere() {
+    if (!this.room) return
+
+    this.room.state.players.forEach((player: IPlayer, id: string) => {
+      if (id === this.mySessionId) return
+      if (!player.name) return
+      this.announcePlayer(player, id, { arriving: false })
+    })
+
+    this.room.state.computers.forEach((computer: IComputer, itemId: string) => {
+      computer.connectedUser.forEach((playerId) => {
+        phaserEvents.emit(Event.ITEM_USER_ADDED, playerId, itemId, ItemType.COMPUTER)
+      })
+    })
+
+    this.room.state.whiteboards.forEach((whiteboard: IWhiteboard, itemId: string) => {
+      whiteboard.connectedUser.forEach((playerId) => {
+        phaserEvents.emit(Event.ITEM_USER_ADDED, playerId, itemId, ItemType.WHITEBOARD)
+      })
+    })
+  }
+
   onPlayerJoined(callback: (Player: IPlayer, key: string) => void, context?: any) {
     phaserEvents.on(Event.PLAYER_JOINED, callback, context)
   }

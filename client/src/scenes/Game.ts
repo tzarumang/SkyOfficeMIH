@@ -160,6 +160,21 @@ export default class Game extends Phaser.Scene {
     this.network.onItemUserAdded(this.handleItemUserAdded, this)
     this.network.onItemUserRemoved(this.handleItemUserRemoved, this)
     this.network.onChatMessageAdded(this.handleChatMessageAdded, this)
+
+    /**
+     * Everyone who was already standing here when we walked in.
+     *
+     * A player is announced while the first state update is decoded, which
+     * happens as soon as the room is joined - and this scene does not start
+     * until the office has been drawn, which for a generated one means waiting
+     * on it over http. So every announcement about somebody already in the
+     * room is made before there is anything listening, and nothing replays
+     * them: the room simply looked empty to whoever arrived last.
+     *
+     * The listeners above are for people who arrive after us. This is for the
+     * people who were already here.
+     */
+    this.network.replayWhoIsHere()
   }
 
   /**
@@ -223,6 +238,10 @@ export default class Game extends Phaser.Scene {
 
   // function to add new player to the otherPlayer group
   private handlePlayerJoined(newPlayer: IPlayer, id: string) {
+    // Somebody can be announced twice: once by the event and once by the walk
+    // over everyone already here. Whichever arrives second is not a new person.
+    if (this.otherPlayerMap.has(id)) return
+
     // Avatars are generated, so the texture may not exist on this client yet.
     // It is deterministic from the descriptor, so everyone builds the same one.
     const texture = isAvatar(newPlayer.avatar)
