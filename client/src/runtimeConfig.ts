@@ -5,7 +5,7 @@
  * pointed at any server from the Portainer stack settings.
  *
  * Build-time VITE_* values still work and are used when nothing is set at
- * runtime, so `yarn dev` and the Netlify build are unaffected.
+ * runtime, so `yarn dev` and any static build are unaffected.
  */
 export interface RuntimeConfig {
   serverUrl?: string

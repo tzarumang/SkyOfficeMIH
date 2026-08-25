@@ -149,13 +149,22 @@ the first two matter for any deployment reachable from the internet.
 | `COLYSEUS_MONITOR_USER` / `COLYSEUS_MONITOR_PASSWORD` | Credentials for the `/colyseus` monitor dashboard. The monitor can read every room's state and disconnect clients, so it is only mounted when both are set. With `NODE_ENV=production` and no credentials, it is not mounted at all. |
 | `PORT` | Port to listen on (default `2567`). |
 
-The client reads these at build time:
+The client is normally configured at runtime by the container - see
+[Deployment](#deployment). These build-time equivalents are the fallback, used
+when nothing is set at runtime, which is what `yarn dev` and any hand-rolled
+static build rely on:
 
-| Variable | Purpose |
+| Variable | Runtime equivalent |
 | --- | --- |
-| `VITE_SERVER_URL` | URL of the Colyseus server. Required for production builds. |
-| `VITE_PEER_HOST` | Host of a self-hosted [PeerServer](https://github.com/peers/peerjs-server). Unset, PeerJS uses its free public broker - signalling metadata leaves your infrastructure, availability depends on a service you do not run, and peer ids share a namespace with every other app using the default. |
-| `VITE_PEER_PORT` / `VITE_PEER_PATH` / `VITE_PEER_SECURE` | Optional details for the above. Default to the host's own port, `/`, and TLS on. |
+| `VITE_SERVER_URL` | `SERVER_URL` |
+| `VITE_PEER_HOST` | `PEER_HOST` |
+| `VITE_PEER_PORT` / `VITE_PEER_PATH` / `VITE_PEER_SECURE` | `PEER_PORT` / `PEER_PATH` / `PEER_SECURE` |
+
+Leaving `VITE_PEER_HOST` and `PEER_HOST` both unset makes PeerJS use its free
+public broker: signalling metadata leaves your infrastructure, availability
+depends on a service you do not run, and peer ids share a namespace with every
+other app using the default. The stack runs a
+[PeerServer](https://github.com/peers/peerjs-server) so you do not have to.
 
 ## Development
 
