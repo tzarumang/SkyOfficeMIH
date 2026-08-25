@@ -456,6 +456,8 @@ async function whoIsAlreadyHereTests() {
     layout: 'generated',
   })
   first.send(Message.UPDATE_PLAYER_NAME, { name: 'Alpha' })
+  first.send(Message.READY_TO_CONNECT)
+  first.send(Message.VIDEO_CONNECTED)
   await sleep(300)
 
   // second in, long after the first announced themselves
@@ -467,6 +469,19 @@ async function whoIsAlreadyHereTests() {
     .map(([, player]: [string, any]) => player.name)
 
   check('the one who arrived second can see the first', seenBySecond, ['Alpha'])
+
+  /**
+   * And can see that they are ready to be called.
+   *
+   * Being drawn is not enough to be talked to: a call is only placed to
+   * somebody whose `readyToConnect` we know about, and for a player already
+   * in the room that became true before we arrived. If the state did not
+   * carry it, nobody joining a room could ever call anybody already in it.
+   */
+  const readiness = [...(second.state as any).players.entries()]
+    .filter(([id]: [string, any]) => id !== second.sessionId)
+    .map(([, player]: [string, any]) => [player.readyToConnect, player.videoConnected])
+  check('and can see that they are ready to be called', readiness, [[true, true]])
 
   // and the first still sees the second once they are named
   second.send(Message.UPDATE_PLAYER_NAME, { name: 'Beta' })
