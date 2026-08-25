@@ -8,6 +8,9 @@
 process.env.PORT = process.env.TEST_PORT || '2599'
 // so the matchmaking origin gate is active for the checks below
 process.env.ALLOWED_ORIGINS = 'http://allowed.example.test'
+// keep the office store out of the working tree
+process.env.OFFICE_STORE_PATH = require('path').join(require('os').tmpdir(), 'skyoffice-test-offices.json')
+try { require('fs').unlinkSync(process.env.OFFICE_STORE_PATH) } catch {}
 
 require('../index')
 
@@ -98,6 +101,82 @@ async function matchmakingOriginTests() {
   check('another site is refused', await matchmakeStatus('http://evil.example.test'), 403)
   // CORS only ever protected browsers; anything else can omit the header
   check('a request with no origin still works', await matchmakeStatus(undefined), 200)
+}
+
+function slug() {
+  return require('crypto').randomBytes(12).toString('hex')
+}
+
+async function officeLifetimeTests() {
+  console.log('\nOffices with a lifetime')
+  const client = new Client(endpoint)
+
+  // a disposable office dies with its room
+  const throwaway = await client.create('custom', {
+    name: 'Throwaway', description: 'd', password: null, unlisted: false,
+  })
+  const throwawayId = throwaway.id
+  await throwaway.leave()
+  await sleep(900)
+  let gone = false
+  try { await client.joinById(throwawayId) } catch { gone = true }
+  check('a disposable office is gone once empty', gone, true)
+
+  // an office with a lifetime comes back from its slug
+  const officeSlug = slug()
+  const kept = await client.create('custom', {
+    name: 'Design Team', description: 'kept', password: null, unlisted: true,
+    slug: officeSlug, lifetimeDays: 7,
+  })
+  await kept.leave()
+  await sleep(900)
+
+  const reopened = await client.joinOrCreate('custom', { slug: officeSlug })
+  await sleep(300)
+  check('an office with a lifetime reopens from its slug', (reopened.state as any) !== undefined, true)
+  const listed = await client.getAvailableRooms('custom')
+  check('and is still unlisted after reopening', listed.some((r) => r.roomId === reopened.id), false)
+  await reopened.leave()
+  await sleep(900)
+
+  // the important one: reopening must not drop the password
+  const lockedSlug = slug()
+  const locked = await client.create('custom', {
+    name: 'Board Room', description: 'private', password: 'hunter2', unlisted: true,
+    slug: lockedSlug, lifetimeDays: 7,
+  })
+  await locked.leave()
+  await sleep(900)
+
+  let hijacked = false
+  try {
+    // a visitor reopening it supplies no password at all
+    const stolen = await client.joinOrCreate('custom', { slug: lockedSlug })
+    hijacked = true
+    await stolen.leave()
+  } catch { /* refused, which is the point */ }
+  check('reopening a private office still demands its password', hijacked, false)
+
+  const withPassword = await client.joinOrCreate('custom', { slug: lockedSlug, password: 'hunter2' })
+  check('and the real password still opens it', typeof withPassword.id === 'string', true)
+  await withPassword.leave()
+
+  // a slug nobody has claimed must not mint an office
+  let invented = false
+  try {
+    const ghost = await client.joinOrCreate('custom', { slug: slug() })
+    invented = true
+    await ghost.leave()
+  } catch { /* refused */ }
+  check('an unknown office link does not create one', invented, false)
+
+  let malformed = false
+  try {
+    const bad = await client.joinOrCreate('custom', { slug: 'no', lifetimeDays: 7 })
+    malformed = true
+    await bad.leave()
+  } catch { /* refused */ }
+  check('a malformed slug is refused', malformed, false)
 }
 
 async function roomTests() {
@@ -259,6 +338,7 @@ async function main() {
   rateLimiterUnits()
   await sleep(700)
   await matchmakingOriginTests()
+  await officeLifetimeTests()
   await roomTests()
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`)

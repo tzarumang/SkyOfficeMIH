@@ -104,7 +104,9 @@ gameServer.define(RoomType.PUBLIC, SkyOffice, {
   password: null,
   unlisted: false,
 })
-gameServer.define(RoomType.CUSTOM, SkyOffice).enableRealtimeListing()
+// filterBy makes joinOrCreate find an office by its slug, which is how a
+// permanent link reopens an office that was disposed when it emptied
+gameServer.define(RoomType.CUSTOM, SkyOffice).filterBy(['slug']).enableRealtimeListing()
 
 /**
  * Register @colyseus/social routes

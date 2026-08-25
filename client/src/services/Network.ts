@@ -79,13 +79,23 @@ export default class Network {
 
   // method to create a custom room
   async createCustom(roomData: IRoomData) {
-    const { name, description, password, unlisted } = roomData
+    const { name, description, password, unlisted, slug, lifetimeDays } = roomData
     this.room = await this.client.create(RoomType.CUSTOM, {
       name,
       description,
       password,
       unlisted,
+      ...(slug ? { slug, lifetimeDays } : {}),
     })
+    this.initialize()
+  }
+
+  /**
+   * Reopens an office by its slug. The room may well have been disposed when it
+   * emptied, so this creates it again from the definition the server kept.
+   */
+  async joinOfficeBySlug(slug: string, password: string | null) {
+    this.room = await this.client.joinOrCreate(RoomType.CUSTOM, { slug, password })
     this.initialize()
   }
 

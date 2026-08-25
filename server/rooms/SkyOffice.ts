@@ -18,6 +18,10 @@ import {
   WhiteboardRemoveUserCommand,
 } from './commands/WhiteboardUpdateArrayCommand'
 import ChatMessageUpdateCommand from './commands/ChatMessageUpdateCommand'
+import OfficeStore, { SLUG_PATTERN } from './OfficeStore'
+
+/** one store for the process; offices outlive the rooms that run them */
+export const officeStore = new OfficeStore()
 
 const MAX_NAME_LENGTH = 32
 const MAX_CHAT_LENGTH = 500
@@ -56,33 +60,36 @@ export class SkyOffice extends Room<OfficeState> {
   private name: string
   private description: string
   private password: string | null = null
+  private slug: string | null = null
   private movementLimiter = new RateLimiter(MOVEMENT_BURST, MOVEMENT_PER_SECOND)
   private movementBudget = new RateLimiter(MOVEMENT_BUDGET_PX, MOVEMENT_REFILL_PX_PER_SECOND)
   private chatLimiter = new RateLimiter(CHAT_BURST, CHAT_PER_SECOND)
   private passwordLimiter = new RateLimiter(PASSWORD_ATTEMPT_BURST, PASSWORD_ATTEMPTS_PER_SECOND)
 
   async onCreate(options: IRoomData) {
-    const { name, description, password, unlisted } = options
-    this.name = (name ?? '').slice(0, MAX_ROOM_NAME_LENGTH)
-    this.description = (description ?? '').slice(0, MAX_ROOM_DESCRIPTION_LENGTH)
-
     // A client must not be able to keep a room resident forever by asking for
-    // it, so the option is ignored - only the public lobby, which the server
-    // defines itself, stays alive while empty.
+    // it, so an empty room is always disposed - including an office with a
+    // lifetime, whose definition lives in the store rather than in memory.
+    // Only the public lobby, which the server defines itself, stays alive.
     this.autoDispose = this.roomName !== RoomType.PUBLIC
 
-    let hasPassword = false
-    if (password) {
-      const salt = await bcrypt.genSalt(10)
-      this.password = await bcrypt.hash(password, salt)
-      hasPassword = true
-    }
+    const settings = await this.resolveSettings(options)
+    this.slug = settings.slug
+
+    this.name = settings.name
+    this.description = settings.description
+    this.password = settings.passwordHash
+
     // A password stops people joining, but the lobby listing still published
     // the name, description and occupancy of every custom room. Unlisted rooms
     // stay out of it and are reachable by id only.
-    if (unlisted) await this.setPrivate(true)
+    if (settings.unlisted) await this.setPrivate(true)
 
-    this.setMetadata({ name: this.name, description: this.description, hasPassword })
+    this.setMetadata({
+      name: this.name,
+      description: this.description,
+      hasPassword: settings.passwordHash !== null,
+    })
 
     this.setState(new OfficeState())
 
@@ -231,6 +238,70 @@ export class SkyOffice extends Room<OfficeState> {
   }
 
   /**
+   * An office with a slug is meant to outlive the room, so its settings come
+   * from the store rather than from whoever happened to open the link. Without
+   * that, a visitor reopening a private office would recreate it with no
+   * password, quietly making it public.
+   */
+  private async resolveSettings(options: IRoomData) {
+    const slug = typeof options?.slug === 'string' ? options.slug : null
+
+    if (slug) {
+      if (!SLUG_PATTERN.test(slug)) {
+        throw new ServerError(400, 'That office link is not valid.')
+      }
+
+      const existing = officeStore.get(slug)
+      if (existing) {
+        // reopening: the recorded settings win over anything supplied now
+        return {
+          slug,
+          name: existing.name,
+          description: existing.description,
+          passwordHash: existing.passwordHash,
+          unlisted: existing.unlisted,
+        }
+      }
+
+      // Creating one is deliberate, and carries a lifetime. Opening a link to
+      // an office that has expired or never existed must not quietly mint an
+      // empty one under that slug.
+      const lifetimeDays = Number(options?.lifetimeDays)
+      if (!Number.isFinite(lifetimeDays) || lifetimeDays < 1) {
+        throw new ServerError(404, 'That office has closed.')
+      }
+
+      const settings = await this.settingsFromOptions(options)
+      officeStore.put({
+        slug,
+        name: settings.name,
+        description: settings.description,
+        passwordHash: settings.passwordHash,
+        unlisted: settings.unlisted,
+        createdAt: Date.now(),
+        expiresAt: OfficeStore.expiryFor(lifetimeDays),
+      })
+
+      return { ...settings, slug }
+    }
+
+    return { ...(await this.settingsFromOptions(options)), slug: null }
+  }
+
+  private async settingsFromOptions(options: IRoomData) {
+    const name = (options?.name ?? '').slice(0, MAX_ROOM_NAME_LENGTH)
+    const description = (options?.description ?? '').slice(0, MAX_ROOM_DESCRIPTION_LENGTH)
+
+    let passwordHash: string | null = null
+    if (options?.password) {
+      const salt = await bcrypt.genSalt(10)
+      passwordHash = await bcrypt.hash(String(options.password), salt)
+    }
+
+    return { name, description, passwordHash, unlisted: Boolean(options?.unlisted) }
+  }
+
+  /**
    * Colyseus does not wrap message handlers, so an exception raised while
    * handling one message would otherwise escape to the socket layer and take
    * the whole process down - every other room included.
@@ -337,6 +408,8 @@ export class SkyOffice extends Room<OfficeState> {
       id: this.roomId,
       name: this.name,
       description: this.description,
+      // present only for an office meant to outlive this room
+      slug: this.slug,
     })
   }
 

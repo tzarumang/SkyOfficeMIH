@@ -38,7 +38,13 @@ type Stage = 'joining' | 'password' | 'failed'
  * Shown when someone opens a share link. It tries the room straight away, and
  * only asks for a password if the room turns out to have one.
  */
-export function InviteJoin({ roomId, onGiveUp }: { roomId: string; onGiveUp: () => void }) {
+export function InviteJoin({
+  invite,
+  onGiveUp,
+}: {
+  invite: { kind: 'office' | 'room'; id: string }
+  onGiveUp: () => void
+}) {
   const [stage, setStage] = useState<Stage>('joining')
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
@@ -48,8 +54,12 @@ export function InviteJoin({ roomId, onGiveUp }: { roomId: string; onGiveUp: () 
     setStage('joining')
     const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
 
-    bootstrap.network
-      .joinCustomById(roomId, withPassword)
+    const opening =
+      invite.kind === 'office'
+        ? bootstrap.network.joinOfficeBySlug(invite.id, withPassword)
+        : bootstrap.network.joinCustomById(invite.id, withPassword)
+
+    opening
       .then(() => {
         forgetShareLink()
         bootstrap.launchGame()
@@ -67,7 +77,11 @@ export function InviteJoin({ roomId, onGiveUp }: { roomId: string; onGiveUp: () 
           return
         }
         setStage('failed')
-        setMessage('That office is no longer open, or the link is wrong.')
+        setMessage(
+          invite.kind === 'office'
+            ? 'That office has expired, or the link is wrong.'
+            : 'That office is no longer open, or the link is wrong.'
+        )
       })
   }
 
@@ -86,7 +100,7 @@ export function InviteJoin({ roomId, onGiveUp }: { roomId: string; onGiveUp: () 
     return (
       <Wrapper as="div">
         <h3>Joining office</h3>
-        <p>{roomId}</p>
+        <p>{invite.id}</p>
         <LinearProgress color="secondary" />
       </Wrapper>
     )
@@ -96,7 +110,7 @@ export function InviteJoin({ roomId, onGiveUp }: { roomId: string; onGiveUp: () 
     return (
       <Wrapper onSubmit={submitPassword}>
         <h3>This office is private</h3>
-        <p>Enter the password to join {roomId}</p>
+        <p>Enter the password to join this office</p>
         <TextField
           autoFocus
           fullWidth
