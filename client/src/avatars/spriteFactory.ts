@@ -1,10 +1,5 @@
 import Phaser from 'phaser'
-import {
-  AvatarDescriptor,
-  avatarTextureKey,
-  genderOf,
-  seedOf,
-} from '../../../types/Avatar'
+import { AvatarDescriptor, avatarTextureKey, genderOf, seedOf } from '../../../types/Avatar'
 import {
   CLOTHING_COLOURS,
   HAIR_COLOURS,
@@ -63,7 +58,8 @@ function classify(scene: Phaser.Scene, base: string): Classification {
 
       const band = bandFor(y)
       const counts =
-        tally.get(colour) || ({ skin: 0, outline: 0, face: 0, hair: 0, top: 0, bottom: 0 } as Record<Region, number>)
+        tally.get(colour) ||
+        ({ skin: 0, outline: 0, face: 0, hair: 0, top: 0, bottom: 0 } as Record<Region, number>)
       counts[band]++
       tally.set(colour, counts)
     }
@@ -126,7 +122,8 @@ export function ensureAvatarTexture(scene: Phaser.Scene, avatar: AvatarDescripto
   for (const [colour, region] of regions) {
     if (region === 'face') continue // eyes and blush stay as drawn
 
-    const target = region === 'hair' ? colours.hair : region === 'top' ? colours.top : colours.bottom
+    const target =
+      region === 'hair' ? colours.hair : region === 'top' ? colours.top : colours.bottom
     // shade by how bright the original colour was, so highlights stay highlights
     const [r, g, b] = colour.split(',').map(Number)
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
@@ -153,6 +150,14 @@ export function ensureAvatarTexture(scene: Phaser.Scene, avatar: AvatarDescripto
   createAvatarAnims(scene, textureKey)
   return textureKey
 }
+
+/**
+ * The drawn sheets lay their sitting frames out in a different order from
+ * their walking ones - down, left, right, up rather than right, up, left,
+ * down - so a sitting frame cannot be worked out from the walking index. It
+ * was, and every generated avatar sat facing the wrong way.
+ */
+const SIT_FRAMES: Record<string, number> = { down: 48, left: 49, right: 50, up: 51 }
 
 /** the same twelve animations the drawn characters have */
 function createAvatarAnims(scene: Phaser.Scene, textureKey: string) {
@@ -183,11 +188,11 @@ function createAvatarAnims(scene: Phaser.Scene, textureKey: string) {
     scene.anims.create({
       key: `${textureKey}_sit_${direction}`,
       frames: scene.anims.generateFrameNumbers(textureKey, {
-        start: 48 + index,
-        end: 48 + index,
+        start: SIT_FRAMES[direction],
+        end: SIT_FRAMES[direction],
       }),
       repeat: 0,
       frameRate,
-      })
+    })
   })
 }
