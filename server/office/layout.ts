@@ -57,8 +57,12 @@ export interface Layout {
   rooms: Room[]
   corridor: Room
   spawn: { x: number; y: number }
-  /** where the production floor puts its desks, filled in by the layout */
-  deskSlots: Array<{ x: number; y: number }>
+  /**
+   * Where the production floor puts its desks. `facing` is which side the chair
+   * goes, so two rows of desks can be set back to back and share a partition
+   * rather than each standing on its own.
+   */
+  deskSlots: Array<{ x: number; y: number; facing: 'up' | 'down' }>
 }
 
 export interface LayoutOptions {
@@ -87,10 +91,19 @@ const ROOM_HEIGHTS: Record<Exclude<Archetype, 'open' | 'corridor'>, number> = {
   lounge: 7,
 }
 
-/** a desk with its chair is three columns wide and four rows deep, plus a gap */
+/**
+ * A bench seats two: three columns wide, two rows deep, worked at from above
+ * and from below. Benches stand shoulder to shoulder across the floor, which
+ * is why the step is the width and not the width plus a gap.
+ */
 const DESK_WIDTH = 3
-const DESK_COLUMN_STEP = DESK_WIDTH + 1
-const DESK_BAND_STEP = 5
+const DESK_COLUMN_STEP = DESK_WIDTH
+const SEATS_PER_BENCH = 2
+/**
+ * Rows from one bench to the next: two for the bench, one for the chair each
+ * side of it, and three of clear floor to walk down between the banks.
+ */
+const BENCH_PITCH = 7
 const MIN_DESK_COLUMNS = 3
 const MAX_DESK_COLUMNS = 8
 /** past this the production floor is a long thin corridor of desks, so widen instead */
@@ -109,8 +122,8 @@ export function buildLayout(rng: Rng, options: LayoutOptions): Layout {
   // --- how tall each side wants to be ---------------------------------------
   const desks = totalDesks(spec)
   const deskColumns = chooseDeskColumns(desks)
-  const deskBands = desks === 0 ? 1 : Math.ceil(desks / deskColumns)
-  const floorHeight = deskBands * DESK_BAND_STEP + 2
+  const benchRows = desks === 0 ? 1 : Math.ceil(desks / (deskColumns * SEATS_PER_BENCH))
+  const floorHeight = benchRows * BENCH_PITCH + 2
 
   // A single column of rooms turns a big office into a very long walk, so once
   // it would tower over the production floor the rooms are split over two
@@ -125,7 +138,9 @@ export function buildLayout(rng: Rng, options: LayoutOptions): Layout {
 
   // The production floor is as wide as its desks need, and never narrower than
   // the one on the hand-drawn map.
-  const floorWidth = Math.max(deskColumns * DESK_COLUMN_STEP + 2 * FLOOR_AISLE + 1, 15)
+  // The bank stands one column clear of the aisle on its left, where the
+  // partition at the end of it goes.
+  const floorWidth = Math.max(deskColumns * DESK_COLUMN_STEP + 2 * FLOOR_AISLE + 2, 15)
   const floorRight = CORRIDOR_RIGHT + floorWidth
   const right = farStack.length > 0 ? floorRight + ROOM_BLOCK_WIDTH : floorRight
   const width = right + 1 + MARGIN
@@ -135,12 +150,22 @@ export function buildLayout(rng: Rng, options: LayoutOptions): Layout {
   const owner: number[] = new Array(width * height).fill(-1)
   const rooms: Room[] = []
 
-  // Whatever height is left over goes to the last room of a column rather than
-  // being left as a gap, so every column reaches the bottom of the building.
+  // A column has to reach the bottom of the building, and it is almost never
+  // exactly as tall as its rooms want to be. The leftover rows are shared out
+  // a row at a time instead of being dumped on the last room, which is what
+  // used to leave one enormous meeting room at the foot of the column with a
+  // small table adrift in the middle of it.
   const stackRoomsInto = (entries: StackEntry[], x0: number, x1: number) => {
+    if (entries.length === 0) return
+    const wanted = entries.reduce((total, entry) => total + entry.height, 0)
+    const slack = Math.max(0, bottom - TOP - wanted)
+    const each = Math.floor(slack / entries.length)
+    const spare = slack % entries.length
+
     let cursor = TOP
     entries.forEach((entry, index) => {
-      const y1 = index === entries.length - 1 ? bottom : cursor + entry.height
+      const grown = entry.height + each + (index < spare ? 1 : 0)
+      const y1 = index === entries.length - 1 ? bottom : cursor + grown
       rooms.push(makeRoom(entry.archetype, entry.name, x0, cursor, x1, y1))
       cursor = y1
     })
@@ -216,42 +241,58 @@ export function buildLayout(rng: Rng, options: LayoutOptions): Layout {
 function placeDeskSlots(floor: Room, columns: number, desks: number) {
   if (desks === 0) return []
 
-  // how many columns of desks actually fit between the walls
+  // how many benches fit side by side between the walls, past the aisle and
+  // the column the partition stands in
   const fits: number[] = []
   for (let i = 0; i < columns; i++) {
-    const x = floor.ix0 + 1 + i * DESK_COLUMN_STEP
-    if (x + DESK_WIDTH - 1 <= floor.ix1 - 1) fits.push(x)
+    const x = floor.ix0 + FLOOR_AISLE + 1 + i * DESK_COLUMN_STEP
+    if (x + DESK_WIDTH - 1 <= floor.ix1 - FLOOR_AISLE) fits.push(x)
   }
   if (fits.length === 0) return []
 
   const perRow = Math.min(fits.length, columns)
-  const rowsNeeded = Math.ceil(desks / perRow)
+  const rowsNeeded = Math.ceil(desks / (perRow * SEATS_PER_BENCH))
 
-  const bandYs: number[] = []
-  for (let y = floor.iy0 + 1; y + 3 <= floor.iy1; y += DESK_BAND_STEP) bandYs.push(y)
-  if (bandYs.length === 0) return []
+  // A bench needs the row above it for the far chair and the row below for the
+  // near one, so the first one cannot sit against either wall.
+  const first = floor.iy0 + 2
+  const last = floor.iy1 - 2
+  if (last < first) return []
 
-  // Spare rows go into the spacing between rows, not into the arrangement.
-  const rows = Math.min(rowsNeeded, bandYs.length)
-  const spacing = Math.floor(bandYs.length / rows)
-  const offset = Math.floor((bandYs.length - (rows - 1) * spacing - 1) / 2)
+  const rows = Math.min(rowsNeeded, Math.floor((last - first) / BENCH_PITCH) + 1)
+
+  /**
+   * The floor is as tall as the building, which is as tall as whichever side
+   * of it wanted more room - so it is usually taller than its desks need. The
+   * spare rows widen the aisles between the banks, up to a point, and past
+   * that the bank simply sits in the middle of the floor. Spreading the banks
+   * the whole height regardless leaves one row marooned at each end.
+   */
+  const even = rows > 1 ? (last - first) / (rows - 1) : 0
+  const pitch = Math.min(Math.max(BENCH_PITCH, Math.floor(even)), BENCH_PITCH + 3)
+  const top = first + Math.floor((last - first - (rows - 1) * pitch) / 2)
+  const bandAt = (row: number) => top + row * pitch
 
   // Centred, but never closer to a wall than the aisle - the floor is entered
   // through both of its side walls, and a desk in a doorway is a desk you have
   // to squeeze past to get onto the floor at all.
-  const gridWidth = (perRow - 1) * DESK_COLUMN_STEP + DESK_WIDTH
+  const gridWidth = perRow * DESK_COLUMN_STEP
   const room = floor.ix1 - floor.ix0 + 1
   const centred = floor.ix0 + Math.floor((room - gridWidth) / 2)
   const left = Math.max(
-    floor.ix0 + FLOOR_AISLE,
+    floor.ix0 + FLOOR_AISLE + 1,
     Math.min(centred, floor.ix1 - FLOOR_AISLE - gridWidth + 1)
   )
 
-  const slots: Array<{ x: number; y: number }> = []
+  // Each bench is two desks, and they are filled far side first so a bank that
+  // is not quite full still reads as a bank rather than a row of odd gaps.
+  const slots: Array<{ x: number; y: number; facing: 'up' | 'down' }> = []
   for (let row = 0; row < rows && slots.length < desks; row++) {
-    const y = bandYs[offset + row * spacing]
-    for (let column = 0; column < perRow && slots.length < desks; column++) {
-      slots.push({ x: left + column * DESK_COLUMN_STEP, y })
+    const y = bandAt(row)
+    for (const facing of ['down', 'up'] as const) {
+      for (let column = 0; column < perRow && slots.length < desks; column++) {
+        slots.push({ x: left + column * DESK_COLUMN_STEP, y, facing })
+      }
     }
   }
   return slots

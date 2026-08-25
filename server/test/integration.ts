@@ -446,6 +446,45 @@ function generatedOfficeUnits() {
     []
   )
 
+  // A bench seats two, back to back, and the whole look of the production floor
+  // depends on it: one footprint, one desk worked at from above and one from
+  // below, a chair on each side. Getting this wrong is what made the first
+  // generated floors read as a scatter of furniture rather than a bank of desks.
+  const benchesAreBacked = [7, 55, 4242].every((seed) => {
+    const { layout, map } = generateOffice({ seed })
+    const chairs = new Set(
+      ((map.layers as any[]).find((layer) => layer.name === 'Chair')?.objects ?? []).map(
+        (chair: any) => `${chair.x / 32},${chair.y / 32 - 1}`
+      )
+    )
+
+    const seats = new Map<string, Set<string>>()
+    for (const slot of layout.deskSlots) {
+      const key = `${slot.x},${slot.y}`
+      if (!seats.has(key)) seats.set(key, new Set())
+      if (seats.get(key)!.has(slot.facing)) return false
+      seats.get(key)!.add(slot.facing)
+
+      // the chair belongs on the outside of the bench, never on the desk itself
+      const chairY = slot.facing === 'up' ? slot.y + 2 : slot.y - 1
+      if (!chairs.has(`${slot.x + 1},${chairY}`)) return false
+    }
+
+    // and no two benches overlap, which would stack desks on top of each other
+    const covered = new Set<string>()
+    for (const key of seats.keys()) {
+      const [x, y] = key.split(',').map(Number)
+      for (let dy = 0; dy < 2; dy++) {
+        for (let dx = 0; dx < 3; dx++) {
+          if (covered.has(`${x + dx},${y + dy}`)) return false
+          covered.add(`${x + dx},${y + dy}`)
+        }
+      }
+    }
+    return seats.size > 0
+  })
+  check('desks are benched back to back, a chair each side', benchesAreBacked, true)
+
   // the spawn both the client and the server assume has to be standing room
   const spawnOnFloor = [1, 2, 3, 99].every((seed) => {
     const { layout } = generateOffice({ seed })

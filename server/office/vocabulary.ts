@@ -60,20 +60,33 @@ export const WALLS = {
 export const CHAIRS = { down: 2562, left: 2563, right: 2564, up: 2566 }
 export type ChairDirection = keyof typeof CHAIRS
 
+/**
+ * The production floor uses a different chair from the meeting rooms - the
+ * one the hand-drawn floor seats its desk banks with, map rows 14 and 17.
+ */
+export const DESK_CHAIRS: Partial<Record<ChairDirection, number>> = { down: 2568, up: 2572 }
+
 /** five screens, so a bank of desks is not obviously repeating */
 export const COMPUTER_GIDS = [4680, 4681, 4682, 4683, 4684]
 export const WHITEBOARD_GIDS = [4685, 4686, 4687]
 export const VENDING_GID = 5488
 
 /**
- * A desk is three tiles wide and two rows deep: a top a player walks behind,
- * and a body they bump into. Map columns 36-38, rows 14-15.
+ * The unit the production floor is built out of, and the thing I had wrong
+ * for a long time: on the hand-drawn map a desk bank is not one desk with a
+ * chair, it is *two* desks sharing one three-by-two footprint - one worked at
+ * from above, one from below, backs against each other. Map columns 30-32,
+ * rows 15-16, where two sprites are stamped over each other: one draws the
+ * near desk, the other the far one.
  */
-export const DESK = {
-  width: 3,
-  top: [2585, 2586, 2587],
-  body: [2617, 2618, 2619],
-}
+export const DESK_BENCH: Prefab = prefab('ObjectsOnCollide', [
+  [3017, 3018, 3019],
+  [3033, 3034, 3035],
+])
+export const DESK_BENCH_FAR: Prefab = prefab('ObjectsOnCollide', [
+  [3039, 3040, 3041],
+  [3055, 3056, 3057],
+])
 
 /**
  * A meeting table: a left cap, a repeating middle and a right cap, over three
@@ -209,6 +222,58 @@ export const WALL_ART: Prefab[] = [
   prefab('Objects', [[2599], [2615]]),
   prefab('Objects', [[2798], [2814]]),
 ]
+
+/**
+ * What is actually on a desk. The production floor of the hand-drawn map
+ * layers these over the desk itself, which is most of why its desks read as
+ * somebody's rather than as furniture - map rows 15-16 and 23-24.
+ */
+/**
+ * What is left lying on a desk - map columns 33-35 and 36-38, rows 14-15.
+ * Two rows, because the things at the back of a desk stand a row higher than
+ * the things at the front of it.
+ */
+export const DESK_CLUTTER: Prefab[] = [
+  prefab('Objects', [
+    [2585, 2586, 2587],
+    [2617, 2618, 2619],
+  ]),
+  prefab('Objects', [
+    [2590, 2591, 2592],
+    [2622, 2623, 2624],
+  ]),
+]
+
+/** the partition between one desk and the next, map column 29 rows 14-16 */
+export const CUBICLE_DIVIDER = prefab('Objects', [[3000], [3016], [3032]])
+
+/** the printer everybody walks to, map columns 25-26 rows 26-28 */
+export const PRINTER: Prefab = {
+  width: 2,
+  height: 3,
+  parts: [
+    { gid: 2880, dx: 0, dy: 0, layer: 'Objects' },
+    { gid: 2881, dx: 1, dy: 0, layer: 'Objects' },
+    { gid: 2878, dx: 0, dy: 1, layer: 'Objects' },
+    { gid: 2879, dx: 1, dy: 1, layer: 'Objects' },
+    { gid: 2896, dx: 0, dy: 1, layer: 'ObjectsOnCollide' },
+    { gid: 2897, dx: 1, dy: 1, layer: 'ObjectsOnCollide' },
+    { gid: 2894, dx: 0, dy: 2, layer: 'ObjectsOnCollide' },
+    { gid: 2895, dx: 1, dy: 2, layer: 'ObjectsOnCollide' },
+  ],
+}
+
+/** the stack of boxes nobody has unpacked, map columns 36-38 rows 27-28 */
+export const BOXES: Prefab = {
+  width: 3,
+  height: 2,
+  parts: [
+    { gid: 4388, dx: 2, dy: 0, layer: 'GenericObjectsOnCollide' },
+    { gid: 4389, dx: 0, dy: 1, layer: 'GenericObjectsOnCollide' },
+    { gid: 4405, dx: 1, dy: 1, layer: 'GenericObjectsOnCollide' },
+    { gid: 4404, dx: 2, dy: 1, layer: 'GenericObjectsOnCollide' },
+  ],
+}
 
 /** a bookcase against a wall, map columns 5-6 rows 15-16 */
 export const BOOKCASE = prefab('Objects', [
