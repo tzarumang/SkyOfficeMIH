@@ -21,6 +21,12 @@ export interface OfficeRecord {
   /** bcrypt hash, or null when the office is open */
   passwordHash: string | null
   unlisted: boolean
+  /**
+   * The id its floor plan grew from, or null for the hand-drawn office.
+   * Recording it is what makes the office the same office when the link is
+   * opened again - the walls have to be where they were left.
+   */
+  officeId: string | null
   createdAt: number
   expiresAt: number
 }

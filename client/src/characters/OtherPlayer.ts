@@ -3,6 +3,7 @@ import Player from './Player'
 import MyPlayer from './MyPlayer'
 import { sittingShiftData } from './Player'
 import WebRTC from '../web/WebRTC'
+import { zoneManager } from '../zones/ZoneManager'
 import { Event, phaserEvents } from '../events/EventCenter'
 
 export default class OtherPlayer extends Player {
@@ -32,6 +33,10 @@ export default class OtherPlayer extends Player {
   makeCall(myPlayer: MyPlayer, webRTC: WebRTC) {
     this.myPlayer = myPlayer
     const myPlayerId = myPlayer.playerId
+
+    // A sealed room keeps its audio inside. Brushing past the doorway of a
+    // private office is not enough to be heard in it.
+    if (zoneManager.sealedApart(this, myPlayer)) return
 
     // Only one side places the call, but both sides overlap - so both record
     // the other as nearby. That is what lets the callee tell an expected call
@@ -172,7 +177,9 @@ export default class OtherPlayer extends Player {
       this.body.touching.none &&
       this.connectionBufferTime >= 750
     ) {
-      if (this.x < 610 && this.y > 515 && this.myPlayer!.x < 610 && this.myPlayer!.y > 515) return
+      // A room that pools its audio holds the call together, so a meeting can
+      // spread out around the table without everyone dropping off.
+      if (zoneManager.sharesRoomAudio(this, this.myPlayer!)) return
       phaserEvents.emit(Event.PLAYER_DISCONNECTED, this.playerId)
       this.connectionBufferTime = 0
       this.connected = false

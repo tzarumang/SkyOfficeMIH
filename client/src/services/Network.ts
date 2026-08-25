@@ -23,6 +23,7 @@ import { setWhiteboardUrls } from '../stores/WhiteboardStore'
 import { serverUrl } from '../runtimeConfig'
 
 export default class Network {
+  private endpoint: string
   private client: Client
   private room?: Room<IOfficeState>
   private lobby!: Room
@@ -34,8 +35,8 @@ export default class Network {
     const protocol = window.location.protocol.replace('http', 'ws')
     // configured at container start, at build time, or fall back to a server
     // on the same host - which is what `yarn dev` wants
-    const endpoint = serverUrl() || `${protocol}//${window.location.hostname}:2567`
-    this.client = new Client(endpoint)
+    this.endpoint = serverUrl() || `${protocol}//${window.location.hostname}:2567`
+    this.client = new Client(this.endpoint)
     this.joinLobbyRoom().then(() => {
       store.dispatch(setLobbyJoined(true))
     })
@@ -80,12 +81,15 @@ export default class Network {
 
   // method to create a custom room
   async createCustom(roomData: IRoomData) {
-    const { name, description, password, unlisted, slug, lifetimeDays } = roomData
+    const { name, description, password, unlisted, slug, lifetimeDays, layout, office } =
+      roomData
     this.room = await this.client.create(RoomType.CUSTOM, {
       name,
       description,
       password,
       unlisted,
+      layout,
+      office,
       ...(slug ? { slug, lifetimeDays } : {}),
     })
     this.initialize()
@@ -98,6 +102,31 @@ export default class Network {
   async joinOfficeBySlug(slug: string, password: string | null) {
     this.room = await this.client.joinOrCreate(RoomType.CUSTOM, { slug, password })
     this.initialize()
+  }
+
+  /** where the server draws a generated office, given its id */
+  officeMapUrl(id: string) {
+    return `${this.endpoint.replace(/^ws/, 'http')}/office/map/${id}.json`
+  }
+
+  /**
+   * Which office this room is running, as an id - empty for the one that
+   * ships with the client. The server puts it in the state, which may not
+   * have arrived yet when the join promise settles, so wait one update for
+   * it. Joining always adds us to the players map, so an update is coming.
+   */
+  officeId(timeoutMs = 5000): Promise<string> {
+    const known = this.room?.state?.mapId
+    if (known) return Promise.resolve(known)
+
+    return new Promise((resolve) => {
+      const settle = () => resolve(this.room?.state?.mapId ?? '')
+      const timer = setTimeout(settle, timeoutMs)
+      this.room?.onStateChange.once(() => {
+        clearTimeout(timer)
+        settle()
+      })
+    })
   }
 
   // set up all network listeners before the game starts

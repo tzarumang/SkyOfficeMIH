@@ -5,6 +5,7 @@ import phaserGame from '../PhaserGame'
 import Game from '../scenes/Game'
 import { peerOptions } from './peerConfig'
 import { toScreenSharePeerId } from '../util'
+import { ItemType } from '../../../types/Items'
 
 export default class ShareScreenManager {
   private myPeer: Peer
@@ -46,7 +47,7 @@ export default class ShareScreenManager {
     // whoever is already at this computer joined before our dialog opened, so
     // they never came through onUserJoined - accept their share too
     const game = phaserGame.scene.keys.game as Game
-    const computerItem = game.computerMap.get(computerId)
+    const computerItem = game.itemById(ItemType.COMPUTER, computerId)
     if (computerItem) {
       for (const userId of computerItem.currentUsers) {
         this.allowedPeers.add(toScreenSharePeerId(userId))
@@ -83,7 +84,7 @@ export default class ShareScreenManager {
 
         // Call all existing users.
         const game = phaserGame.scene.keys.game as Game
-        const computerItem = game.computerMap.get(store.getState().computer.computerId!)
+        const computerItem = game.itemById(ItemType.COMPUTER, store.getState().computer.computerId!)
         if (computerItem) {
           for (const userId of computerItem.currentUsers) {
             this.onUserJoined(userId)

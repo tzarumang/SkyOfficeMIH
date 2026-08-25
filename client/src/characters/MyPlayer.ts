@@ -5,17 +5,14 @@ import { sittingShiftData } from './Player'
 import Player from './Player'
 import Network from '../services/Network'
 import Chair from '../items/Chair'
-import Computer from '../items/Computer'
-import Whiteboard from '../items/Whiteboard'
 
 import { phaserEvents, Event } from '../events/EventCenter'
 import { ensureAvatarTexture } from '../avatars/spriteFactory'
 import store from '../stores'
 import { pushPlayerJoinedMessage } from '../stores/ChatStore'
-import { ItemType } from '../../../types/Items'
+import { ITEM_SPECS } from '../../../types/Items'
 import { NavKeys } from '../../../types/KeyboardState'
 import { JoystickMovement } from '../components/Joystick'
-import { openURL } from '../utils/helpers'
 
 export default class MyPlayer extends Player {
   private playContainerBody: Phaser.Physics.Arcade.Body
@@ -67,29 +64,19 @@ export default class MyPlayer extends Player {
 
     const item = playerSelector.selectedItem
 
-    if (Phaser.Input.Keyboard.JustDown(keyR)) {
-      switch (item?.itemType) {
-        case ItemType.COMPUTER:
-          const computer = item as Computer
-          computer.openDialog(this.playerId, network)
-          break
-        case ItemType.WHITEBOARD:
-          const whiteboard = item as Whiteboard
-          whiteboard.openDialog(network)
-          break
-        case ItemType.VENDINGMACHINE:
-          // hacky and hard-coded, but leaving it as is for now
-          const url = 'https://www.buymeacoffee.com/skyoffice'
-          openURL(url)
-          break
-      }
+    // The manifest says which key an item answers to; the item says what that
+    // does, because a screen share and a coffee machine share no code.
+    const spec = item ? ITEM_SPECS[item.itemType] : undefined
+
+    if (Phaser.Input.Keyboard.JustDown(keyR) && spec?.key === 'R') {
+      item!.use(this.playerId, network)
     }
 
     switch (this.playerBehavior) {
       case PlayerBehavior.IDLE:
         // if press E in front of selected chair
-        if (Phaser.Input.Keyboard.JustDown(keyE) && item?.itemType === ItemType.CHAIR) {
-          const chairItem = item as Chair
+        if (Phaser.Input.Keyboard.JustDown(keyE) && spec?.key === 'E' && item instanceof Chair) {
+          const chairItem = item
           /**
            * move player to the chair and play sit animation
            * a delay is called to wait for player movement (from previous velocity) to end

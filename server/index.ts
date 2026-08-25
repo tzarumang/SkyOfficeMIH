@@ -9,6 +9,7 @@ import { RoomType } from '../types/Rooms'
 // import socialRoutes from "@colyseus/social/express"
 
 import { SkyOffice } from './rooms/SkyOffice'
+import { officeDrawingFor, readOfficeId } from './rooms/OfficeMaps'
 
 const port = Number(process.env.PORT || 2567)
 const isProduction = process.env.NODE_ENV === 'production'
@@ -83,6 +84,28 @@ app.use(express.json())
 // rooms or players - it is reachable without credentials.
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
+})
+
+/**
+ * The floor plan of a generated office.
+ *
+ * The seed is the whole drawing, so the server rebuilds it on demand rather
+ * than keeping a copy per room. Anyone may ask for any seed - a floor plan is
+ * not a secret, and knowing one gets you no closer to joining the office that
+ * uses it, which still needs the room id and its password.
+ */
+app.get('/office/map/:id.json', (req, res) => {
+  const id = readOfficeId(req.params.id)
+  if (id === null) return res.status(400).json({ error: 'not an office id' })
+
+  try {
+    // the drawing for an id never changes, so it can be cached hard
+    res.set('Cache-Control', 'public, max-age=31536000, immutable')
+    return res.json(officeDrawingFor(id))
+  } catch (error: any) {
+    console.error(`[office] could not draw ${id}:`, error?.message)
+    return res.status(500).json({ error: 'could not draw that office' })
+  }
 })
 
 const server = http.createServer(app)

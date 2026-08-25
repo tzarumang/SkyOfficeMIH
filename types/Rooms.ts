@@ -1,3 +1,13 @@
+import { OfficeSpec } from './Office'
+
+/** the office someone drew by hand, or one grown from a seed */
+export type OfficeLayout = 'classic' | 'generated'
+
+export const OFFICE_LAYOUTS: Array<{ value: OfficeLayout; label: string; hint: string }> = [
+  { value: 'classic', label: 'The original office', hint: 'The floor plan everyone knows' },
+  { value: 'generated', label: 'A new floor plan', hint: 'Built for this office alone' },
+]
+
 export enum RoomType {
   LOBBY = 'lobby',
   PUBLIC = 'skyoffice',
@@ -17,6 +27,10 @@ export interface IRoomData {
   slug?: string
   /** how long the slug keeps working; ignored without a slug */
   lifetimeDays?: number
+  /** draw a fresh office, or use the one that ships with the client */
+  layout?: OfficeLayout
+  /** how much of everything a generated office holds */
+  office?: OfficeSpec
 }
 
 /** offered when creating an office */
