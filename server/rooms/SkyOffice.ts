@@ -34,7 +34,7 @@ const CHAT_BURST = 5
 const PASSWORD_ATTEMPTS_PER_SECOND = 1 / 60
 const PASSWORD_ATTEMPT_BURST = 5
 
-/** best effort origin for throttling; Heroku and friends put the real ip here */
+/** best effort origin for throttling; a reverse proxy puts the real ip here */
 function clientAddress(request?: IncomingMessage) {
   const forwarded = request?.headers['x-forwarded-for']
   const first = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]

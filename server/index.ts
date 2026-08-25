@@ -47,6 +47,12 @@ if (allowedOrigins.length > 0) {
 app.use(express.json())
 // app.use(express.static('dist'))
 
+// Liveness probe for the container runtime. Deliberately says nothing about
+// rooms or players - it is reachable without credentials.
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' })
+})
+
 const server = http.createServer(app)
 const gameServer = new Server({
   server,
