@@ -22,6 +22,12 @@ import {
 import { setWhiteboardUrls } from '../stores/WhiteboardStore'
 import { serverUrl } from '../runtimeConfig'
 
+/**
+ * What a player carries besides their name and position. Anyone joining a
+ * room has to be told all of it about everybody already in it.
+ */
+const CATCH_UP_FIELDS = ['avatar', 'anim', 'readyToConnect', 'videoConnected'] as const
+
 export default class Network {
   private endpoint: string
   private client: Client
@@ -292,6 +298,24 @@ export default class Network {
     phaserEvents.emit(Event.PLAYER_JOINED, player, id)
     store.dispatch(setPlayerNameMap({ id, name: player.name }))
     if (options.arriving) store.dispatch(pushPlayerJoinedMessage(player.name))
+
+    /**
+     * Everything else about them, as it stands right now.
+     *
+     * Being announced only says who somebody is and where. The rest of what
+     * a client knows about a player - whether they are ready to be called,
+     * whether they are on camera, which way they are facing - arrives as
+     * changes, and a player who was already here changed all of that before
+     * we could hear it. So they were drawn as somebody who is not ready to
+     * talk, and stayed that way: `readyToConnect` is one of the conditions
+     * for placing a call, and it never became true.
+     *
+     * The same path the changes take, so there is one place that knows how
+     * to apply a field.
+     */
+    for (const field of CATCH_UP_FIELDS) {
+      phaserEvents.emit(Event.PLAYER_UPDATED, field, player[field], id)
+    }
   }
 
   /**
