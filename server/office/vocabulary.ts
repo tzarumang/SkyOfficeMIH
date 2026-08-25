@@ -188,6 +188,28 @@ export const CORNER_DESK: Prefab = {
   ],
 }
 
+/**
+ * Things hung on a wall, from the wall bands of the hand-drawn map. They go on
+ * the Objects layer, which nothing collides with - the wall behind them already
+ * stops a player, and a picture you can bump into is a picture in the room.
+ */
+export const WALL_ART: Prefab[] = [
+  // framed pictures, map columns 22-23 and 32-33 of the private office wall
+  prefab('Objects', [
+    [2776, 2777],
+    [2792, 2793],
+  ]),
+  prefab('Objects', [
+    [2783, 2784],
+    [2799, 2800],
+  ]),
+  // narrow ones: a notice, a mirror, a clock
+  prefab('Objects', [[2751], [2767]]),
+  prefab('Objects', [[2752], [2768]]),
+  prefab('Objects', [[2599], [2615]]),
+  prefab('Objects', [[2798], [2814]]),
+]
+
 /** a bookcase against a wall, map columns 5-6 rows 15-16 */
 export const BOOKCASE = prefab('Objects', [
   [2831, 2832],
