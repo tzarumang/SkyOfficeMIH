@@ -10,8 +10,6 @@ import ArrowRightIcon from '@mui/icons-material/ArrowRight'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import RefreshIcon from '@mui/icons-material/Refresh'
-import IconButton from '@mui/material/IconButton'
-import Tooltip from '@mui/material/Tooltip'
 
 import { GENDERS, Gender, buildAvatar } from '../../../types/Avatar'
 import { Portrait } from '../avatars/Portrait'
@@ -88,9 +86,8 @@ const Left = styled.div`
 
   .avatar-preview {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
     background: #dbdbe0;
     border-radius: 8px;
     padding: 10px;
@@ -162,16 +159,17 @@ export default function LoginDialog() {
           <SubTitle>Your avatar</SubTitle>
           <div className="avatar-preview">
             <Portrait avatar={avatar} size={140} />
-            <Tooltip title="Generate another">
-              <IconButton
-                aria-label="generate another avatar"
-                color="secondary"
-                onClick={() => setSeed(newSeed())}
-              >
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
           </div>
+          <Button
+            fullWidth
+            variant="contained"
+            color="secondary"
+            size="large"
+            startIcon={<RefreshIcon />}
+            onClick={() => setSeed(newSeed())}
+          >
+            Generate Avatar
+          </Button>
           <ToggleButtonGroup
             exclusive
             size="small"
