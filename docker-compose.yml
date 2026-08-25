@@ -5,6 +5,10 @@
 # is told to connect to, so they have to be reachable from wherever people open
 # the app - not container names.
 #
+# Ports bind to 127.0.0.1 by default, so the only way in is whatever you put in
+# front of them - a Cloudflare tunnel, a reverse proxy. Set BIND_ADDRESS=0.0.0.0
+# to reach them from other machines directly.
+#
 # Copy .env.example to .env for a local `docker compose up`.
 
 services:
@@ -23,7 +27,7 @@ services:
       COLYSEUS_MONITOR_USER: ${COLYSEUS_MONITOR_USER:-}
       COLYSEUS_MONITOR_PASSWORD: ${COLYSEUS_MONITOR_PASSWORD:-}
     ports:
-      - "${SERVER_PORT:-2567}:2567"
+      - "${BIND_ADDRESS:-127.0.0.1}:${SERVER_PORT:-2567}:2567"
 
   # Self-hosted signalling. Without this the client falls back to the free
   # public PeerJS broker, which puts call metadata on a third party and shares
@@ -33,7 +37,7 @@ services:
     restart: unless-stopped
     command: ["--port", "9000", "--path", "/"]
     ports:
-      - "${PEER_PUBLIC_PORT:-9000}:9000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${PEER_PUBLIC_PORT:-9000}:9000"
 
   client:
     build:
@@ -56,4 +60,4 @@ services:
       # set to "false" when reaching peerjs over plain http
       PEER_SECURE: ${PEER_SECURE:-}
     ports:
-      - "${CLIENT_PORT:-8080}:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:${CLIENT_PORT:-8080}:80"

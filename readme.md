@@ -121,6 +121,7 @@ reachable from wherever people open the app. Container names will not work.
 | `ALLOWED_ORIGINS` | Comma-separated origins allowed to reach the matchmaking API, e.g. `https://office.example.com`. Unset means any origin is accepted. |
 | `COLYSEUS_MONITOR_USER` / `COLYSEUS_MONITOR_PASSWORD` | Credentials for the `/colyseus` dashboard, which reads every room's state and can disconnect clients. **It is not mounted at all unless both are set.** |
 | `CLIENT_PORT` / `SERVER_PORT` / `PEER_PUBLIC_PORT` | Host ports to publish on. |
+| `BIND_ADDRESS` | Interface those ports bind to. Defaults to `127.0.0.1`, so only the host can reach them - which is what you want when a tunnel or reverse proxy on that host forwards them. Use `0.0.0.0` to expose them to your network. |
 
 `.env.example` has worked examples for both a reverse-proxied setup and a bare
 host.
