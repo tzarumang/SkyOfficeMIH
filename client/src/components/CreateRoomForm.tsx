@@ -11,7 +11,14 @@ import MenuItem from '@mui/material/MenuItem'
 import Visibility from '@mui/icons-material/Visibility'
 import VisibilityOff from '@mui/icons-material/VisibilityOff'
 
-import { IRoomData, OFFICE_LIFETIMES } from '../../../types/Rooms'
+import { IRoomData, OFFICE_LAYOUTS, OFFICE_LIFETIMES, OfficeLayout } from '../../../types/Rooms'
+import {
+  DEFAULT_OFFICE_SPEC,
+  OFFICE_SPEC_FIELDS,
+  OfficeSpec,
+  totalDesks,
+  totalRooms,
+} from '../../../types/Office'
 import { newOfficeSlug } from '../shareLink'
 import { useAppSelector } from '../hooks'
 
@@ -25,6 +32,28 @@ const CreateRoomFormWrapper = styled.form`
   gap: 20px;
 `
 
+const OfficeSpecFields = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+`
+
+const SpecHeading = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+
+  span {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.7;
+  }
+`
+
 export const CreateRoomForm = () => {
   const [values, setValues] = useState<IRoomData>({
     name: '',
@@ -34,6 +63,8 @@ export const CreateRoomForm = () => {
   })
   // 0 means the office closes when everyone leaves and its link dies with it
   const [lifetimeDays, setLifetimeDays] = useState(0)
+  const [layout, setLayout] = useState<OfficeLayout>('classic')
+  const [office, setOffice] = useState<OfficeSpec>(DEFAULT_OFFICE_SPEC)
   const [showPassword, setShowPassword] = useState(false)
   const [nameFieldEmpty, setNameFieldEmpty] = useState(false)
   const [descriptionFieldEmpty, setDescriptionFieldEmpty] = useState(false)
@@ -56,8 +87,9 @@ export const CreateRoomForm = () => {
     if (isValidName && isValidDescription && lobbyJoined) {
       const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
       // an office that should outlive the room needs a stable id to be found by
+      const settings = { ...values, layout, ...(layout === 'generated' ? { office } : {}) }
       const room: IRoomData =
-        lifetimeDays > 0 ? { ...values, slug: newOfficeSlug(), lifetimeDays } : values
+        lifetimeDays > 0 ? { ...settings, slug: newOfficeSlug(), lifetimeDays } : settings
 
       bootstrap.network
         .createCustom(room)
@@ -108,6 +140,54 @@ export const CreateRoomForm = () => {
           ),
         }}
       />
+      <TextFieldMui
+        select
+        label="Floor plan"
+        variant="outlined"
+        color="secondary"
+        value={layout}
+        onChange={(event) => setLayout(event.target.value as OfficeLayout)}
+        helperText={OFFICE_LAYOUTS.find((option) => option.value === layout)?.hint}
+      >
+        {OFFICE_LAYOUTS.map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextFieldMui>
+
+      {layout === 'generated' && (
+        <OfficeSpecFields>
+          <SpecHeading>
+            What goes in it
+            <span>
+              {totalRooms(office)} room{totalRooms(office) === 1 ? '' : 's'} and{' '}
+              {totalDesks(office)} desk{totalDesks(office) === 1 ? '' : 's'}. The building is sized
+              to hold them.
+            </span>
+          </SpecHeading>
+
+          {OFFICE_SPEC_FIELDS.map((field) => (
+            <TextFieldMui
+              key={field.key}
+              type="number"
+              label={field.label}
+              variant="outlined"
+              color="secondary"
+              size="small"
+              value={office[field.key]}
+              helperText={field.hint}
+              inputProps={{ min: 0, max: field.max }}
+              onChange={(event) => {
+                const asked = Math.floor(Number(event.target.value))
+                const count = Number.isFinite(asked) ? Math.max(0, Math.min(asked, field.max)) : 0
+                setOffice((current) => ({ ...current, [field.key]: count }))
+              }}
+            />
+          ))}
+        </OfficeSpecFields>
+      )}
+
       <TextFieldMui
         select
         label="Keep this office"

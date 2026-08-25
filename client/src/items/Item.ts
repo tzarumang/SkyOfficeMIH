@@ -1,10 +1,15 @@
 import Phaser from 'phaser'
-import { ItemType } from '../../../types/Items'
+import { ITEM_SPECS, ItemType } from '../../../types/Items'
+import Network from '../services/Network'
 
 export default class Item extends Phaser.Physics.Arcade.Sprite {
   private dialogBox!: Phaser.GameObjects.Container
   private statusBox!: Phaser.GameObjects.Container
+  /** assigned from the map when the item is placed */
   itemType!: ItemType
+  /** position within its own layer, for the items the server shares out */
+  id?: string
+  currentUsers = new Set<string>()
 
   constructor(scene: Phaser.Scene, x: number, y: number, texture: string, frame?: string | number) {
     super(scene, x, y, texture, frame)
@@ -12,6 +17,47 @@ export default class Item extends Phaser.Physics.Arcade.Sprite {
     // add dialogBox and statusBox containers on top of everything which we can add text in later
     this.dialogBox = this.scene.add.container().setDepth(10000)
     this.statusBox = this.scene.add.container().setDepth(10000)
+  }
+
+  get spec() {
+    return ITEM_SPECS[this.itemType]
+  }
+
+  onOverlapDialog() {
+    this.setDialogBox(this.spec.prompt(this.currentUsers.size))
+  }
+
+  /** what pressing this item's key does - scenery does nothing */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  use(playerId: string, network: Network) {}
+
+  addCurrentUser(userId: string) {
+    if (this.currentUsers.has(userId)) return
+    this.currentUsers.add(userId)
+    this.onUserAdded(userId)
+    this.updateStatus()
+  }
+
+  removeCurrentUser(userId: string) {
+    if (!this.currentUsers.delete(userId)) return
+    this.onUserRemoved(userId)
+    this.updateStatus()
+  }
+
+  /** hooks for items that do something beyond counting heads */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected onUserAdded(userId: string) {}
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected onUserRemoved(userId: string) {}
+
+  private updateStatus() {
+    const numberOfUsers = this.currentUsers.size
+    this.clearStatusBox()
+    if (numberOfUsers === 1) {
+      this.setStatusBox(`${numberOfUsers} user`)
+    } else if (numberOfUsers > 1) {
+      this.setStatusBox(`${numberOfUsers} users`)
+    }
   }
 
   // add texts into dialog box container

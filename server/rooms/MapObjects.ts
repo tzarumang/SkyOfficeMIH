@@ -1,11 +1,16 @@
 import fs from 'fs'
 import path from 'path'
+import { ITEM_SPECS, ItemType, SHARED_ITEM_TYPES } from '../../types/Items'
 
 /**
  * The client builds its items straight out of the Tiled map, keyed by the order
- * they appear in the object layer. The server reads the same file so that the
- * two agree on how many items exist and where they are, instead of both sides
- * hard-coding counts that silently drift apart.
+ * they appear in the object layer. The server reads the same map, through the
+ * same ITEM_SPECS manifest, so the two agree on how many items exist and where
+ * they are instead of both sides hard-coding counts that silently drift apart.
+ *
+ * Every office has its own map now - one is drawn by hand, the rest are
+ * generated - so this reads a map rather than *the* map, and a room holds on to
+ * the one it was opened with.
  */
 
 export interface ItemBox {
@@ -14,6 +19,13 @@ export interface ItemBox {
   y: number
   halfWidth: number
   halfHeight: number
+  /**
+   * How far outside its own footprint a player may stand and still interact
+   * with it. Comfortably more than the reach the client's item selector allows,
+   * while still far smaller than the distance between two different items - so
+   * a player cannot connect to an item across the map.
+   */
+  reach: number
 }
 
 export interface MapBounds {
@@ -34,12 +46,35 @@ interface TiledLayer {
   objects?: TiledObject[]
 }
 
-interface TiledMap {
+export interface TiledMap {
   width: number
   height: number
   tilewidth: number
   tileheight: number
   layers: TiledLayer[]
+  properties?: Array<{ name: string; value: unknown }>
+}
+
+/** everything a room needs to know about the office it is running */
+export interface OfficeMap {
+  /** null for the hand-drawn office, the id it was grown from otherwise */
+  id: string | null
+  bounds: MapBounds
+  /** where a player appears, in world pixels */
+  spawn: { x: number; y: number }
+  boxes(itemType: ItemType): ItemBox[]
+}
+
+/** the spawn the hand-drawn office has always used */
+export const CLASSIC_SPAWN = { x: 705, y: 500 }
+
+function readSpawn(map: TiledMap) {
+  const value = (name: string) =>
+    Number((map.properties ?? []).find((property) => property.name === name)?.value)
+
+  const x = value('spawnX')
+  const y = value('spawnY')
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : CLASSIC_SPAWN
 }
 
 const MAP_RELATIVE_PATH = path.join('client', 'public', 'assets', 'map', 'map.json')
@@ -66,11 +101,12 @@ function findMapFile(): string {
   )
 }
 
-function readObjectLayer(map: TiledMap, layerName: string): ItemBox[] {
-  const layer = map.layers.find((l) => l.name === layerName && l.type === 'objectgroup')
+function readItemLayer(map: TiledMap, itemType: ItemType): ItemBox[] {
+  const spec = ITEM_SPECS[itemType]
+  const layer = map.layers.find((l) => l.name === spec.layer && l.type === 'objectgroup')
 
   if (!layer || !layer.objects) {
-    throw new Error(`Object layer "${layerName}" is missing from the Tiled map.`)
+    throw new Error(`Object layer "${spec.layer}" is missing from the Tiled map.`)
   }
 
   // Tiled anchors tile objects at their bottom-left corner - same math the
@@ -80,32 +116,38 @@ function readObjectLayer(map: TiledMap, layerName: string): ItemBox[] {
     y: object.y - object.height * 0.5,
     halfWidth: object.width * 0.5,
     halfHeight: object.height * 0.5,
+    reach: spec.reach,
   }))
 }
 
-const map: TiledMap = JSON.parse(fs.readFileSync(findMapFile(), 'utf8'))
+/** reads a Tiled map into the shape a room works with */
+export function officeMapFrom(map: TiledMap, id: string | null): OfficeMap {
+  const boxes = new Map<ItemType, ItemBox[]>(
+    SHARED_ITEM_TYPES.map((itemType) => [itemType, readItemLayer(map, itemType)])
+  )
 
-export const mapBounds: MapBounds = {
-  width: map.width * map.tilewidth,
-  height: map.height * map.tileheight,
+  return {
+    id,
+    bounds: { width: map.width * map.tilewidth, height: map.height * map.tileheight },
+    spawn: readSpawn(map),
+    boxes: (itemType) => boxes.get(itemType) ?? [],
+  }
 }
 
-export const computerBoxes = readObjectLayer(map, 'Computer')
-export const whiteboardBoxes = readObjectLayer(map, 'Whiteboard')
+/** where the hand-drawn map lives; the office generator reads its tilesets from here */
+export const REFERENCE_MAP_PATH = findMapFile()
 
-/**
- * How far outside an item's own footprint a player may stand and still interact
- * with it. Two tiles is comfortably more than the reach the client's item
- * selector allows, while still far smaller than the distance between two
- * different items - so a player cannot connect to an item across the map.
- */
-const INTERACTION_MARGIN = 64
+/** the office someone drew by hand, which the public lobby still runs in */
+export const classicOfficeMap = officeMapFrom(
+  JSON.parse(fs.readFileSync(REFERENCE_MAP_PATH, 'utf8')),
+  null
+)
 
 export function isWithinReach(box: ItemBox | undefined, x: number, y: number) {
   if (!box) return false
 
   return (
-    Math.abs(x - box.x) <= box.halfWidth + INTERACTION_MARGIN &&
-    Math.abs(y - box.y) <= box.halfHeight + INTERACTION_MARGIN
+    Math.abs(x - box.x) <= box.halfWidth + box.reach &&
+    Math.abs(y - box.y) <= box.halfHeight + box.reach
   )
 }

@@ -6,7 +6,10 @@ import { Player, OfficeState, Computer, Whiteboard } from './schema/OfficeState'
 import { Message } from '../../types/Messages'
 import { IRoomData, RoomType } from '../../types/Rooms'
 import RateLimiter from './RateLimiter'
-import { computerBoxes, whiteboardBoxes, mapBounds, isWithinReach, ItemBox } from './MapObjects'
+import { OfficeMap, classicOfficeMap, isWithinReach, ItemBox } from './MapObjects'
+import { newOfficeId, officeMapFor, readOfficeId } from './OfficeMaps'
+import { clampOfficeSpec } from '../../types/Office'
+import { ItemType } from '../../types/Items'
 import PlayerUpdateCommand from './commands/PlayerUpdateCommand'
 import PlayerUpdateNameCommand from './commands/PlayerUpdateNameCommand'
 import {
@@ -62,6 +65,7 @@ export class SkyOffice extends Room<OfficeState> {
   private description: string
   private password: string | null = null
   private slug: string | null = null
+  private office: OfficeMap = classicOfficeMap
   private movementLimiter = new RateLimiter(MOVEMENT_BURST, MOVEMENT_PER_SECOND)
   private movementBudget = new RateLimiter(MOVEMENT_BUDGET_PX, MOVEMENT_REFILL_PX_PER_SECOND)
   private chatLimiter = new RateLimiter(CHAT_BURST, CHAT_PER_SECOND)
@@ -76,6 +80,7 @@ export class SkyOffice extends Room<OfficeState> {
 
     const settings = await this.resolveSettings(options)
     this.slug = settings.slug
+    this.office = officeMapFor(settings.officeId)
 
     this.name = settings.name
     this.description = settings.description
@@ -94,21 +99,25 @@ export class SkyOffice extends Room<OfficeState> {
 
     this.setState(new OfficeState())
 
+    // The client draws whichever office this is, so it has to be told which
+    // one before its game scene starts.
+    this.state.mapId = settings.officeId ?? ''
+
     // items come from the same Tiled map the client renders, so the ids on both
     // sides always line up
-    computerBoxes.forEach((_, index) => {
+    this.computerBoxes.forEach((_, index) => {
       this.state.computers.set(String(index), new Computer())
     })
 
-    whiteboardBoxes.forEach((_, index) => {
+    this.whiteboardBoxes.forEach((_, index) => {
       this.state.whiteboards.set(String(index), new Whiteboard())
     })
 
     // when a player connect to a computer, add to the computer connectedUser array
     this.onSafeMessage(Message.CONNECT_TO_COMPUTER, (client, message: { computerId: string }) => {
-      const computerId = this.readItemId(message?.computerId, computerBoxes.length)
+      const computerId = this.readItemId(message?.computerId, this.computerBoxes.length)
       if (computerId === null) return
-      if (!this.isPlayerNearItem(client, computerBoxes[Number(computerId)])) return
+      if (!this.isPlayerNearItem(client, this.computerBoxes[Number(computerId)])) return
 
       this.dispatcher.dispatch(new ComputerAddUserCommand(), { client, computerId })
     })
@@ -117,7 +126,7 @@ export class SkyOffice extends Room<OfficeState> {
     this.onSafeMessage(
       Message.DISCONNECT_FROM_COMPUTER,
       (client, message: { computerId: string }) => {
-        const computerId = this.readItemId(message?.computerId, computerBoxes.length)
+        const computerId = this.readItemId(message?.computerId, this.computerBoxes.length)
         if (computerId === null) return
 
         this.dispatcher.dispatch(new ComputerRemoveUserCommand(), { client, computerId })
@@ -126,7 +135,7 @@ export class SkyOffice extends Room<OfficeState> {
 
     // when a player stop sharing screen
     this.onSafeMessage(Message.STOP_SCREEN_SHARE, (client, message: { computerId: string }) => {
-      const computerId = this.readItemId(message?.computerId, computerBoxes.length)
+      const computerId = this.readItemId(message?.computerId, this.computerBoxes.length)
       if (computerId === null) return
 
       const computer = this.state.computers.get(computerId)
@@ -145,9 +154,9 @@ export class SkyOffice extends Room<OfficeState> {
     this.onSafeMessage(
       Message.CONNECT_TO_WHITEBOARD,
       (client, message: { whiteboardId: string }) => {
-        const whiteboardId = this.readItemId(message?.whiteboardId, whiteboardBoxes.length)
+        const whiteboardId = this.readItemId(message?.whiteboardId, this.whiteboardBoxes.length)
         if (whiteboardId === null) return
-        if (!this.isPlayerNearItem(client, whiteboardBoxes[Number(whiteboardId)])) return
+        if (!this.isPlayerNearItem(client, this.whiteboardBoxes[Number(whiteboardId)])) return
 
         this.dispatcher.dispatch(new WhiteboardAddUserCommand(), { client, whiteboardId })
       }
@@ -157,7 +166,7 @@ export class SkyOffice extends Room<OfficeState> {
     this.onSafeMessage(
       Message.DISCONNECT_FROM_WHITEBOARD,
       (client, message: { whiteboardId: string }) => {
-        const whiteboardId = this.readItemId(message?.whiteboardId, whiteboardBoxes.length)
+        const whiteboardId = this.readItemId(message?.whiteboardId, this.whiteboardBoxes.length)
         if (whiteboardId === null) return
 
         this.dispatcher.dispatch(new WhiteboardRemoveUserCommand(), { client, whiteboardId })
@@ -168,8 +177,8 @@ export class SkyOffice extends Room<OfficeState> {
     this.onSafeMessage(
       Message.UPDATE_PLAYER,
       (client, message: { x: number; y: number; anim: string }) => {
-        const x = this.readCoordinate(message?.x, mapBounds.width)
-        const y = this.readCoordinate(message?.y, mapBounds.height)
+        const x = this.readCoordinate(message?.x, this.office.bounds.width)
+        const y = this.readCoordinate(message?.y, this.office.bounds.height)
         if (x === null || y === null) return
         if (typeof message.anim !== 'string' || message.anim.length > MAX_ANIM_LENGTH) return
         if (!this.movementLimiter.consume(client.sessionId)) return
@@ -263,13 +272,15 @@ export class SkyOffice extends Room<OfficeState> {
 
       const existing = officeStore.get(slug)
       if (existing) {
-        // reopening: the recorded settings win over anything supplied now
+        // reopening: the recorded settings win over anything supplied now,
+        // the floor plan included, or the office would come back rearranged
         return {
           slug,
           name: existing.name,
           description: existing.description,
           passwordHash: existing.passwordHash,
           unlisted: existing.unlisted,
+          officeId: readOfficeId(existing.officeId),
         }
       }
 
@@ -288,6 +299,7 @@ export class SkyOffice extends Room<OfficeState> {
         description: settings.description,
         passwordHash: settings.passwordHash,
         unlisted: settings.unlisted,
+        officeId: settings.officeId,
         createdAt: Date.now(),
         expiresAt: OfficeStore.expiryFor(lifetimeDays),
       })
@@ -308,7 +320,18 @@ export class SkyOffice extends Room<OfficeState> {
       passwordHash = await bcrypt.hash(String(options.password), salt)
     }
 
-    return { name, description, passwordHash, unlisted: Boolean(options?.unlisted) }
+    // The public lobby is always the office people know. Anywhere else, a
+    // fresh floor plan is grown from a seed the server picks, so a client
+    // cannot ask for somebody else's office by naming its seed.
+    const generated = this.roomName !== RoomType.PUBLIC && options?.layout === 'generated'
+
+    return {
+      name,
+      description,
+      passwordHash,
+      unlisted: Boolean(options?.unlisted),
+      officeId: generated ? newOfficeId(clampOfficeSpec(options?.office)) : null,
+    }
   }
 
   /**
@@ -379,6 +402,14 @@ export class SkyOffice extends Room<OfficeState> {
    * item, so connecting has to be gated on actually standing next to it -
    * otherwise any client can subscribe to every item in the room at once.
    */
+  private get computerBoxes() {
+    return this.office.boxes(ItemType.COMPUTER)
+  }
+
+  private get whiteboardBoxes() {
+    return this.office.boxes(ItemType.WHITEBOARD)
+  }
+
   private isPlayerNearItem(client: Client, box: ItemBox) {
     const player = this.state.players.get(client.sessionId)
     if (!player) return false
@@ -413,7 +444,11 @@ export class SkyOffice extends Room<OfficeState> {
   }
 
   onJoin(client: Client, options: any) {
-    this.state.players.set(client.sessionId, new Player())
+    const player = new Player()
+    // every office is its own size, so the door is wherever that map put it
+    player.x = this.office.spawn.x
+    player.y = this.office.spawn.y
+    this.state.players.set(client.sessionId, player)
     client.send(Message.SEND_ROOM_DATA, {
       id: this.roomId,
       name: this.name,

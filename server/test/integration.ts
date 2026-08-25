@@ -16,7 +16,11 @@ require('../index')
 
 import { Client } from 'colyseus.js'
 import { Message } from '../../types/Messages'
-import { computerBoxes } from '../rooms/MapObjects'
+import { classicOfficeMap } from '../rooms/MapObjects'
+import { officeDrawingFor } from '../rooms/OfficeMaps'
+import { contentsOf, generateOffice } from '../office'
+import { OfficeSpec, parseOfficeId } from '../../types/Office'
+import { ItemType } from '../../types/Items'
 import RateLimiter from '../rooms/RateLimiter'
 import http from 'http'
 
@@ -202,6 +206,7 @@ async function roomTests() {
   )
 
   console.log('\nItem proximity')
+  const computerBoxes = classicOfficeMap.boxes(ItemType.COMPUTER)
   const near = computerBoxes[0]
   const far = computerBoxes[3]
   const connectedTo = (id: string) => (room.state as any).computers.get(id)?.connectedUser.size
@@ -334,11 +339,242 @@ async function roomTests() {
   await locked.leave()
 }
 
+/**
+ * The generator draws an office nobody has looked at, so the checks it runs on
+ * itself are the only thing standing between a bad roll and a room a player
+ * cannot get out of. Run enough seeds that a one-in-a-hundred layout shows up.
+ */
+function generatedOfficeUnits() {
+  console.log('\nGenerated offices')
+
+  const SEEDS = 200
+  let broken = 0
+  const complaints = new Set<string>()
+
+  for (let seed = 1; seed <= SEEDS; seed++) {
+    const office = generateOffice({ seed })
+    if (office.problems.length > 0) {
+      broken++
+      for (const problem of office.problems) complaints.add(problem.invariant)
+    }
+  }
+  check(
+    `${SEEDS} seeds each pass every invariant`,
+    broken === 0 ? 'all valid' : `${broken} broken: ${[...complaints].join(', ')}`,
+    'all valid'
+  )
+
+  const first = generateOffice({ seed: 4242 })
+  check(
+    'the same seed draws the same office',
+    JSON.stringify(generateOffice({ seed: 4242 }).map),
+    JSON.stringify(first.map)
+  )
+  check(
+    'a different seed draws a different one',
+    JSON.stringify(generateOffice({ seed: 4243 }).map) !== JSON.stringify(first.map),
+    true
+  )
+
+  // the client walks these layers without checking they exist
+  const layers = (first.map.layers as Array<{ name: string }>).map((layer) => layer.name)
+  const required = [
+    'Ground',
+    'Wall',
+    'Chair',
+    'Objects',
+    'ObjectsOnCollide',
+    'GenericObjects',
+    'GenericObjectsOnCollide',
+    'Computer',
+    'Whiteboard',
+    'Basement',
+    'VendingMachine',
+    'Zone',
+  ]
+  check(
+    'every layer the client reads is present',
+    required.filter((name) => !layers.includes(name)),
+    []
+  )
+
+  // the spawn both the client and the server assume has to be standing room
+  const spawnOnFloor = [1, 2, 3, 99].every((seed) => {
+    const { layout } = generateOffice({ seed })
+    const at = (y: number) => layout.cells[y * layout.width + layout.spawn.x]
+    return at(layout.spawn.y) === 1 && at(layout.spawn.y + 1) === 1
+  })
+  check('a player always appears on clear floor', spawnOnFloor, true)
+
+  // a sealed room is the one thing the audio rules cannot recover from being wrong
+  const zones = (first.map.layers as Array<{ name: string; objects?: any[] }>).find(
+    (layer) => layer.name === 'Zone'
+  )
+  const policies = (zones?.objects ?? []).map(
+    (zone: any) => zone.properties.find((p: any) => p.name === 'audio').value
+  )
+  check(
+    'every zone names a policy the client knows',
+    policies.filter((policy: string) => !['proximity', 'room', 'room-sealed'].includes(policy)),
+    []
+  )
+}
+
+/** GETs a path off the test server and returns the status and parsed body */
+function getJson(path: string) {
+  return new Promise<{ status: number; body: any }>((resolve, reject) => {
+    const request = http.request(
+      { host: '127.0.0.1', port: Number(process.env.PORT), path, method: 'GET' },
+      (response) => {
+        let raw = ''
+        response.setEncoding('utf8')
+        response.on('data', (chunk) => (raw += chunk))
+        response.on('end', () => {
+          try {
+            resolve({ status: response.statusCode || 0, body: raw ? JSON.parse(raw) : null })
+          } catch {
+            resolve({ status: response.statusCode || 0, body: null })
+          }
+        })
+      }
+    )
+    request.on('error', reject)
+    request.end()
+  })
+}
+
+async function generatedRoomTests() {
+  console.log('\nOffices with their own floor plan')
+  const client = new Client(endpoint)
+
+  // the office people know stays the office people know
+  const classic = await client.joinOrCreate('skyoffice')
+  await sleep(300)
+  check('the public lobby is the hand-drawn office', (classic.state as any).mapId, '')
+  check(
+    'and it has the items that map has',
+    (classic.state as any).computers.size,
+    classicOfficeMap.boxes(ItemType.COMPUTER).length
+  )
+  await classic.leave()
+
+  // a generated office reports the seed it was grown from
+  const generated = await client.create('custom', {
+    name: 'Generated', description: 'fresh', password: null, unlisted: false,
+    layout: 'generated',
+  })
+  await sleep(300)
+  const officeId = (generated.state as any).mapId
+  check('a generated office reports an id', parseOfficeId(officeId) !== null, true)
+
+  // and the room really is running that office, not the hand-drawn one
+  const drawing = officeDrawingFor(officeId)
+  const computersInDrawing = (drawing.layers as any[]).find(
+    (layer) => layer.name === 'Computer'
+  ).objects.length
+  check(
+    'its items come from its own floor plan',
+    (generated.state as any).computers.size,
+    computersInDrawing
+  )
+  await generated.leave()
+
+  // a client must not be able to name the office it lands in
+  const asked = await client.create('custom', {
+    name: 'Asking', description: 'x', password: null, unlisted: false,
+    layout: 'generated', mapId: '1234-1-1-1-1-1', officeId: '1234-1-1-1-1-1',
+  })
+  await sleep(300)
+  check(
+    'the server picks the id, not the client',
+    (asked.state as any).mapId === '1234-1-1-1-1-1',
+    false
+  )
+  await asked.leave()
+
+  // the floor plan has to survive the office being emptied and reopened
+  const officeSlug = slug()
+  const first = await client.create('custom', {
+    name: 'Studio', description: 'kept', password: null, unlisted: true,
+    layout: 'generated', slug: officeSlug, lifetimeDays: 7,
+  })
+  await sleep(300)
+  const firstId = (first.state as any).mapId
+  await first.leave()
+  await sleep(900)
+
+  const reopened = await client.joinOrCreate('custom', { slug: officeSlug })
+  await sleep(300)
+  check('an office reopens with the same walls', (reopened.state as any).mapId, firstId)
+  await reopened.leave()
+
+  // the drawing itself, which the client fetches over http
+  const served = await getJson(`/office/map/${firstId}.json`)
+  check('the floor plan is served', served.status, 200)
+  check(
+    'and it is a Tiled map with every layer the client reads',
+    served.body?.type,
+    'map'
+  )
+  check(
+    'and the same seed always serves the same drawing',
+    JSON.stringify(served.body) === JSON.stringify(officeDrawingFor(firstId)),
+    true
+  )
+
+  const nonsense = await getJson('/office/map/not-an-office.json')
+  check('an id that is not an office is refused', nonsense.status, 400)
+  const huge = await getJson('/office/map/99999999999-1-1-1-1-1.json')
+  check('and so is one out of range', huge.status, 400)
+
+  // the whole point of asking: the office holds what was ordered
+  const ordered: OfficeSpec = {
+    meetingRooms: 2,
+    oneOnOneRooms: 3,
+    computerDesks: 7,
+    plainDesks: 5,
+    lounges: 1,
+  }
+  const built = await client.create('custom', {
+    name: 'To Order', description: 'counted', password: null, unlisted: false,
+    layout: 'generated', office: ordered,
+  })
+  await sleep(300)
+  const builtId = (built.state as any).mapId
+  const parsed = parseOfficeId(builtId)!
+  const got = contentsOf(generateOffice({ seed: parsed.seed, spec: parsed.spec }))
+  check(
+    'the office holds exactly what was ordered',
+    {
+      meetingRooms: got.meetingRooms,
+      oneOnOneRooms: got.oneOnOneRooms,
+      lounges: got.lounges,
+      computerDesks: got.computerDesks,
+      desks: got.desks,
+    },
+    {
+      meetingRooms: 2,
+      oneOnOneRooms: 3,
+      lounges: 1,
+      computerDesks: 7,
+      desks: 12,
+    }
+  )
+  check(
+    'and the server tracks that many screen shares',
+    (built.state as any).computers.size,
+    7
+  )
+  await built.leave()
+}
+
 async function main() {
   rateLimiterUnits()
+  generatedOfficeUnits()
   await sleep(700)
   await matchmakingOriginTests()
   await officeLifetimeTests()
+  await generatedRoomTests()
   await roomTests()
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`)

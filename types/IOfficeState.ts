@@ -26,6 +26,8 @@ export interface IChatMessage extends Schema {
 }
 
 export interface IOfficeState extends Schema {
+  /** the id the office was grown from, or empty for the hand-drawn one */
+  mapId: string
   players: MapSchema<IPlayer>
   computers: MapSchema<IComputer>
   whiteboards: MapSchema<IWhiteboard>

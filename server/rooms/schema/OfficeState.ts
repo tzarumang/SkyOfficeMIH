@@ -34,6 +34,13 @@ export class ChatMessage extends Schema implements IChatMessage {
 }
 
 export class OfficeState extends Schema implements IOfficeState {
+  /**
+   * How the client knows which office to draw. It arrives with the first
+   * state update, before the game scene starts, so the map can be fetched
+   * then rather than being baked into the client build.
+   */
+  @type('string') mapId = ''
+
   @type({ map: Player })
   players = new MapSchema<Player>()
 

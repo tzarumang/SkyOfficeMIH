@@ -5,18 +5,18 @@ import { createCharacterAnims } from '../anims/CharacterAnims'
 
 import Item from '../items/Item'
 import Chair from '../items/Chair'
-import Computer from '../items/Computer'
-import Whiteboard from '../items/Whiteboard'
-import VendingMachine from '../items/VendingMachine'
+import { itemClass } from '../items'
 import '../characters/MyPlayer'
 import '../characters/OtherPlayer'
 import MyPlayer from '../characters/MyPlayer'
 import OtherPlayer from '../characters/OtherPlayer'
 import PlayerSelector from '../characters/PlayerSelector'
 import Network from '../services/Network'
+import { zoneManager } from '../zones/ZoneManager'
 import { IPlayer } from '../../../types/IOfficeState'
 import { PlayerBehavior } from '../../../types/PlayerBehavior'
-import { ItemType } from '../../../types/Items'
+import { ITEM_SPECS, ITEM_TYPES, ItemType } from '../../../types/Items'
+import { DECOR_LAYERS, DecorLayerSpec, GROUND_LAYER } from '../../../types/MapLayers'
 import { textureFromAnim } from '../util'
 import { ensureAvatarTexture } from '../avatars/spriteFactory'
 import { isAvatar } from '../../../types/Avatar'
@@ -24,6 +24,11 @@ import { isAvatar } from '../../../types/Avatar'
 import store from '../stores'
 import { setFocused, setShowChat } from '../stores/ChatStore'
 import { NavKeys, Keyboard } from '../../../types/KeyboardState'
+
+/** custom property set on the object in Tiled */
+function readProperty(object: Phaser.Types.Tilemaps.TiledObject, name: string) {
+  return object.properties?.find((property: { name: string }) => property.name === name)?.value
+}
 
 export default class Game extends Phaser.Scene {
   network!: Network
@@ -35,8 +40,7 @@ export default class Game extends Phaser.Scene {
   private playerSelector!: Phaser.GameObjects.Zone
   private otherPlayers!: Phaser.Physics.Arcade.Group
   private otherPlayerMap = new Map<string, OtherPlayer>()
-  computerMap = new Map<string, Computer>()
-  private whiteboardMap = new Map<string, Whiteboard>()
+  private itemsByType = new Map<ItemType, Map<string, Item>>()
 
   constructor() {
     super('game')
@@ -69,7 +73,7 @@ export default class Game extends Phaser.Scene {
     this.input.keyboard.enabled = true
   }
 
-  create(data: { network: Network }) {
+  create(data: { network: Network; mapKey?: string }) {
     if (!data.network) {
       throw new Error('server instance missing')
     } else {
@@ -78,66 +82,50 @@ export default class Game extends Phaser.Scene {
 
     createCharacterAnims(this.anims)
 
-    this.map = this.make.tilemap({ key: 'tilemap' })
-    const FloorAndGround = this.map.addTilesetImage('FloorAndGround', 'tiles_wall')
+    this.map = this.make.tilemap({ key: data.mapKey ?? 'tilemap' })
+    const groundTileset = this.map.addTilesetImage(GROUND_LAYER.tileset, GROUND_LAYER.texture)
 
-    const groundLayer = this.map.createLayer('Ground', FloorAndGround)
+    const groundLayer = this.map.createLayer(GROUND_LAYER.layer, groundTileset)
     groundLayer.setCollisionByProperty({ collides: true })
+
+    // the social rules of the rooms live in the map alongside their furniture
+    zoneManager.load(this.map)
 
     // debugDraw(groundLayer, this)
 
-    this.myPlayer = this.add.myPlayer(705, 500, 'adam', this.network.mySessionId)
+    const spawn = this.spawnPoint()
+    this.myPlayer = this.add.myPlayer(spawn.x, spawn.y, 'adam', this.network.mySessionId)
     this.playerSelector = new PlayerSelector(this, 0, 0, 16, 16)
 
-    // import chair objects from Tiled map to Phaser
-    const chairs = this.physics.add.staticGroup({ classType: Chair })
-    const chairLayer = this.map.getObjectLayer('Chair')
-    chairLayer.objects.forEach((chairObj) => {
-      const item = this.addObjectFromTiled(chairs, chairObj, 'chairs', 'chair') as Chair
-      // custom properties[0] is the object direction specified in Tiled
-      item.itemDirection = chairObj.properties[0].value
-    })
+    // Items come out of the Tiled map one group per kind. ITEM_SPECS says
+    // where they live, what they are drawn with and how they behave, so a kind
+    // of item this map has never held before needs no change here.
+    const selectableItems: Phaser.Physics.Arcade.StaticGroup[] = []
+    this.itemsByType.clear()
 
-    // import computers objects from Tiled map to Phaser
-    const computers = this.physics.add.staticGroup({ classType: Computer })
-    const computerLayer = this.map.getObjectLayer('Computer')
-    computerLayer.objects.forEach((obj, i) => {
-      const item = this.addObjectFromTiled(computers, obj, 'computers', 'computer') as Computer
-      item.setDepth(item.y + item.height * 0.27)
-      const id = `${i}`
-      item.id = id
-      this.computerMap.set(id, item)
-    })
+    ITEM_TYPES.forEach((itemType) => {
+      const spec = ITEM_SPECS[itemType]
+      const group = this.physics.add.staticGroup({ classType: itemClass(itemType) })
+      const objectLayer = this.map.getObjectLayer(spec.layer)
+      const itemsById = new Map<string, Item>()
 
-    // import whiteboards objects from Tiled map to Phaser
-    const whiteboards = this.physics.add.staticGroup({ classType: Whiteboard })
-    const whiteboardLayer = this.map.getObjectLayer('Whiteboard')
-    whiteboardLayer.objects.forEach((obj, i) => {
-      const item = this.addObjectFromTiled(
-        whiteboards,
-        obj,
-        'whiteboards',
-        'whiteboard'
-      ) as Whiteboard
-      const id = `${i}`
-      item.id = id
-      this.whiteboardMap.set(id, item)
-    })
+      objectLayer.objects.forEach((object, index) => {
+        const item = this.addObjectFromTiled(group, object, spec.texture, spec.tileset) as Item
+        item.itemType = itemType
+        item.id = `${index}`
+        if (spec.depthOffset) item.setDepth(item.y + item.height * spec.depthOffset)
+        if (item instanceof Chair) item.itemDirection = readProperty(object, 'direction')
+        itemsById.set(item.id, item)
+      })
 
-    // import vending machine objects from Tiled map to Phaser
-    const vendingMachines = this.physics.add.staticGroup({ classType: VendingMachine })
-    const vendingMachineLayer = this.map.getObjectLayer('VendingMachine')
-    vendingMachineLayer.objects.forEach((obj, i) => {
-      this.addObjectFromTiled(vendingMachines, obj, 'vendingmachines', 'vendingmachine')
+      this.itemsByType.set(itemType, itemsById)
+      if (spec.key) selectableItems.push(group)
+      if (spec.collides)
+        this.physics.add.collider([this.myPlayer, this.myPlayer.playerContainer], group)
     })
 
     // import other objects from Tiled map to Phaser
-    this.addGroupFromTiled('Wall', 'tiles_wall', 'FloorAndGround', false)
-    this.addGroupFromTiled('Objects', 'office', 'Modern_Office_Black_Shadow', false)
-    this.addGroupFromTiled('ObjectsOnCollide', 'office', 'Modern_Office_Black_Shadow', true)
-    this.addGroupFromTiled('GenericObjects', 'generic', 'Generic', false)
-    this.addGroupFromTiled('GenericObjectsOnCollide', 'generic', 'Generic', true)
-    this.addGroupFromTiled('Basement', 'basement', 'Basement', true)
+    DECOR_LAYERS.forEach((spec) => this.addGroupFromTiled(spec))
 
     this.otherPlayers = this.physics.add.group({ classType: OtherPlayer })
 
@@ -145,11 +133,10 @@ export default class Game extends Phaser.Scene {
     this.cameras.main.startFollow(this.myPlayer, true)
 
     this.physics.add.collider([this.myPlayer, this.myPlayer.playerContainer], groundLayer)
-    this.physics.add.collider([this.myPlayer, this.myPlayer.playerContainer], vendingMachines)
 
     this.physics.add.overlap(
       this.playerSelector,
-      [chairs, computers, whiteboards, vendingMachines],
+      selectableItems,
       this.handleItemSelectorOverlap,
       undefined,
       this
@@ -172,6 +159,21 @@ export default class Game extends Phaser.Scene {
     this.network.onItemUserAdded(this.handleItemUserAdded, this)
     this.network.onItemUserRemoved(this.handleItemUserRemoved, this)
     this.network.onChatMessageAdded(this.handleChatMessageAdded, this)
+  }
+
+  /**
+   * Where this office puts a player. A generated building is whatever size
+   * its contents need, so it carries its own spawn; the hand-drawn one has
+   * always used the same spot.
+   */
+  private spawnPoint() {
+    const properties = this.map.properties as Array<{ name: string; value: number }>
+    const read = (name: string) =>
+      Number(properties?.find((property) => property.name === name)?.value)
+
+    const x = read('spawnX')
+    const y = read('spawnY')
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : { x: 705, y: 500 }
   }
 
   private handleItemSelectorOverlap(playerSelector, selectionItem) {
@@ -205,23 +207,19 @@ export default class Game extends Phaser.Scene {
     return obj
   }
 
-  private addGroupFromTiled(
-    objectLayerName: string,
-    key: string,
-    tilesetName: string,
-    collidable: boolean
-  ) {
+  private addGroupFromTiled(spec: DecorLayerSpec) {
     const group = this.physics.add.staticGroup()
-    const objectLayer = this.map.getObjectLayer(objectLayerName)
+    const objectLayer = this.map.getObjectLayer(spec.layer)
     objectLayer.objects.forEach((object) => {
-      const actualX = object.x! + object.width! * 0.5
-      const actualY = object.y! - object.height! * 0.5
-      group
-        .get(actualX, actualY, key, object.gid! - this.map.getTileset(tilesetName).firstgid)
-        .setDepth(actualY)
+      this.addObjectFromTiled(group, object, spec.texture, spec.tileset)
     })
-    if (this.myPlayer && collidable)
+    if (this.myPlayer && spec.collides)
       this.physics.add.collider([this.myPlayer, this.myPlayer.playerContainer], group)
+  }
+
+  /** the item a server update is talking about */
+  itemById(itemType: ItemType, itemId: string) {
+    return this.itemsByType.get(itemType)?.get(itemId)
   }
 
   // function to add new player to the otherPlayer group
@@ -273,23 +271,11 @@ export default class Game extends Phaser.Scene {
   }
 
   private handleItemUserAdded(playerId: string, itemId: string, itemType: ItemType) {
-    if (itemType === ItemType.COMPUTER) {
-      const computer = this.computerMap.get(itemId)
-      computer?.addCurrentUser(playerId)
-    } else if (itemType === ItemType.WHITEBOARD) {
-      const whiteboard = this.whiteboardMap.get(itemId)
-      whiteboard?.addCurrentUser(playerId)
-    }
+    this.itemById(itemType, itemId)?.addCurrentUser(playerId)
   }
 
   private handleItemUserRemoved(playerId: string, itemId: string, itemType: ItemType) {
-    if (itemType === ItemType.COMPUTER) {
-      const computer = this.computerMap.get(itemId)
-      computer?.removeCurrentUser(playerId)
-    } else if (itemType === ItemType.WHITEBOARD) {
-      const whiteboard = this.whiteboardMap.get(itemId)
-      whiteboard?.removeCurrentUser(playerId)
-    }
+    this.itemById(itemType, itemId)?.removeCurrentUser(playerId)
   }
 
   private handleChatMessageAdded(playerId: string, content: string) {

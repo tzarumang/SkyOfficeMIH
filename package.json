@@ -8,6 +8,7 @@
     "build": "tsc --project server/tsconfig.server.json",
     "start:prod": "node server/lib/server/index.js",
     "test": "ts-node --project server/tsconfig.server.json server/test/integration.ts",
+    "office:generate": "ts-node --project server/tsconfig.server.json server/office/cli.ts",
     "audit:check": "node scripts/audit.js",
     "audit:update": "node scripts/audit.js --update"
   },
