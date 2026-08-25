@@ -80,11 +80,16 @@ export default class Bootstrap extends Phaser.Scene {
 
     const mapKey = await this.loadOfficeMap(await this.network.officeId())
 
-    this.network.webRTC?.checkPreviousPermission()
     this.scene.launch('game', {
       network: this.network,
       mapKey,
     })
+
+    // Asked for after the scene is on its way, not before: granting camera
+    // permission on a previous visit means the stream can arrive at once, and
+    // whoever it is announced to has to exist by then. The scene reads the
+    // answer out of the store as well, because `launch` only queues a start.
+    this.network.webRTC?.checkPreviousPermission()
 
     // update Redux state
     store.dispatch(setRoomJoined(true))
