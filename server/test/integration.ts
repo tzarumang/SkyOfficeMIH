@@ -6,6 +6,8 @@
  * Run with: yarn test
  */
 process.env.PORT = process.env.TEST_PORT || '2599'
+// so the matchmaking origin gate is active for the checks below
+process.env.ALLOWED_ORIGINS = 'http://allowed.example.test'
 
 require('../index')
 
@@ -13,6 +15,7 @@ import { Client } from 'colyseus.js'
 import { Message } from '../../types/Messages'
 import { computerBoxes } from '../rooms/MapObjects'
 import RateLimiter from '../rooms/RateLimiter'
+import http from 'http'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -60,6 +63,41 @@ function rateLimiterUnits() {
   check('takeUpTo spends what it can', budget.takeUpTo('m', 400, 0), 150)
   check('and leaves nothing behind', budget.takeUpTo('m', 10, 0), 0)
   check('it refills at its own rate', budget.takeUpTo('m', 400, 100), 60)
+}
+
+/** POSTs a matchmaking request, optionally as a browser would, and reports the status */
+function matchmakeStatus(origin?: string) {
+  return new Promise<number>((resolve, reject) => {
+    const request = http.request(
+      {
+        host: '127.0.0.1',
+        port: Number(process.env.PORT),
+        path: '/matchmake/joinOrCreate/skyoffice',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(origin ? { Origin: origin } : {}),
+        },
+      },
+      (response) => {
+        response.resume()
+        response.on('end', () => resolve(response.statusCode || 0))
+      }
+    )
+    request.on('error', reject)
+    request.end('{}')
+  })
+}
+
+async function matchmakingOriginTests() {
+  console.log('\nMatchmaking origins')
+
+  // Colyseus answers /matchmake/* on the raw http server, before express and its
+  // cors middleware see it, so this has to be enforced in front of Colyseus.
+  check('an allowed origin gets through', await matchmakeStatus('http://allowed.example.test'), 200)
+  check('another site is refused', await matchmakeStatus('http://evil.example.test'), 403)
+  // CORS only ever protected browsers; anything else can omit the header
+  check('a request with no origin still works', await matchmakeStatus(undefined), 200)
 }
 
 async function roomTests() {
@@ -220,6 +258,7 @@ async function roomTests() {
 async function main() {
   rateLimiterUnits()
   await sleep(700)
+  await matchmakingOriginTests()
   await roomTests()
 
   console.log(failures === 0 ? '\nall checks passed' : `\n${failures} check(s) failed`)

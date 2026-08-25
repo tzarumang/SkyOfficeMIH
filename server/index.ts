@@ -44,6 +44,38 @@ if (allowedOrigins.length > 0) {
   console.warn('ALLOWED_ORIGINS is not set - accepting requests from any origin.')
 }
 
+/**
+ * Colyseus 0.14 answers /matchmake/* on the raw http server, before express and
+ * its cors middleware ever see the request, and hardcodes
+ * Access-Control-Allow-Origin: *. Restricting origins therefore has to happen in
+ * front of Colyseus's own listener rather than through express.
+ *
+ * This only protects browsers, which is all CORS ever does: a browser always
+ * sends Origin on a cross-origin request, while anything else can just leave it
+ * out. Requests arriving without an Origin are passed through so non-browser
+ * clients keep working - it stops another site driving this server through a
+ * visitor's browser, not someone with a script.
+ */
+function restrictMatchmakingOrigins(httpServer: http.Server, origins: string[]) {
+  const existing = httpServer.listeners('request') as Array<
+    (req: http.IncomingMessage, res: http.ServerResponse) => void
+  >
+  httpServer.removeAllListeners('request')
+
+  httpServer.on('request', (req, res) => {
+    const origin = req.headers.origin
+    const isMatchmaking = (req.url || '').includes('/matchmake/')
+
+    if (isMatchmaking && origin && !origins.includes(origin)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Origin not allowed' }))
+      return
+    }
+
+    for (const listener of existing) listener.call(httpServer, req, res)
+  })
+}
+
 app.use(express.json())
 // app.use(express.static('dist'))
 
@@ -57,6 +89,12 @@ const server = http.createServer(app)
 const gameServer = new Server({
   server,
 })
+
+// must come after the Server constructor, which is what installs the
+// matchmaking listener we are wrapping
+if (allowedOrigins.length > 0) {
+  restrictMatchmakingOrigins(server, allowedOrigins)
+}
 
 // register room handlers
 gameServer.define(RoomType.LOBBY, LobbyRoom)
