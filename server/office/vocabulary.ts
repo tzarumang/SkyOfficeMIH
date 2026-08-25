@@ -66,6 +66,13 @@ export type ChairDirection = keyof typeof CHAIRS
  */
 export const DESK_CHAIRS: Partial<Record<ChairDirection, number>> = { down: 2568, up: 2572 }
 
+/**
+ * The tub chairs the corridor of the hand-drawn map is lined with, map row 12
+ * at columns 7-9 and 15-18. Two of them, in runs, so a long wall of seating is
+ * not one chair repeated.
+ */
+export const HALL_CHAIRS = [2573, 2574]
+
 /** and the private office uses a third: the same chair seen from the side */
 export const OFFICE_CHAIR = 2569
 
@@ -206,6 +213,20 @@ export const WINDOWS = [
     [3660, 3661],
   ]),
 ]
+
+/**
+ * The tall plant that stands between the runs of chairs in that corridor, map
+ * column 6 rows 10-12. Its pot is the only part of it you bump into.
+ */
+export const HALL_PLANT: Prefab = {
+  width: 1,
+  height: 3,
+  parts: [
+    { gid: 2782, dx: 0, dy: 0, layer: 'Objects' },
+    { gid: 2798, dx: 0, dy: 1, layer: 'Objects' },
+    { gid: 2814, dx: 0, dy: 2, layer: 'ObjectsOnCollide' },
+  ],
+}
 
 /** a potted plant, map column 32 rows 1-2 of the private office */
 export const PLANT = prefab('Objects', [[2702], [2718]])

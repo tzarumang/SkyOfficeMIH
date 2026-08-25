@@ -17,6 +17,8 @@ import {
   BENCH_POST_TOP,
   DESK_CHAIRS,
   DESK_CLUTTER,
+  HALL_CHAIRS,
+  HALL_PLANT,
   OFFICE_CHAIR,
   PLANT,
   POOL_TABLE,
@@ -108,11 +110,13 @@ export function furnish(rng: Rng, layout: Layout, spec: OfficeSpec): Placement[]
       case 'lounge':
         out.push(...lounge(rng, room))
         break
-      // The production floor and the corridor hold no furniture of their own,
-      // but their walls are the biggest blank surfaces in the building.
-      case 'open':
       case 'corridor':
-        out.push(...dressWalls(rng, room, [room.ix1 + 1, room.ix1 + 1], false))
+        out.push(...hallway(rng, room))
+        break
+      // The production floor holds no furniture of its own, but its walls are
+      // the biggest blank surfaces in the building.
+      case 'open':
+        out.push(...dressWalls(rng, room, [room.ix1 + 1, room.ix1 + 1], { board: false }))
         break
       default:
         break
@@ -266,25 +270,105 @@ function oneOnOneRoom(rng: Rng, room: Room): Placement[] {
     }
   })
 
-  // A cabinet beside the desk rather than by the door - it is the one other
-  // solid thing in the room, and solid things belong away from the way in.
-  const cabinetX = doorOnRight ? deskX + CORNER_DESK.width + 1 : deskX - CABINET.width - 1
-  const cabinetTop = Math.min(bottom - 1, rows.from + 2)
+  // One cabinet, at the end of the sofa. The drawn office has exactly one other
+  // solid thing in it and puts it here.
+  const inward = doorOnRight ? -1 : 1
+  const cabinetX =
+    inward > 0 ? visitorFrom + SOFA_SEATS.length : visitorFrom - 1 - CABINET.width + 1
   if (
     bottom - rows.from >= 3 &&
     cabinetX >= room.ix0 &&
     cabinetX + CABINET.width - 1 <= room.ix1 &&
-    !blocks(clear, cabinetX, cabinetTop, CABINET.width, CABINET.height)
+    clearOfDesk(cabinetX) &&
+    clearOfDesk(cabinetX + CABINET.width - 1) &&
+    !blocks(clear, cabinetX, rows.from + 1, CABINET.width, CABINET.height)
   ) {
-    out.push(...stamp(CABINET, cabinetX, cabinetTop))
+    out.push(...stamp(CABINET, cabinetX, rows.from + 1))
+  }
+
+  // And something green in the two corners at the desk end, which is what the
+  // drawn office does and the whole of what it does. This room is not filled
+  // the way the others are: a private office is meant to read as bare, and a
+  // pass that stands a bookcase against every clear stretch of wall turns it
+  // into a furniture showroom.
+  const cornerX = doorOnRight ? cols.to : cols.from
+  for (const top of [rows.from + 1, bottom - PLANT.height + 1]) {
+    if (top < rows.from || top + PLANT.height - 1 > bottom) continue
+    if (blocks(clear, cornerX, top, PLANT.width, PLANT.height)) continue
+    out.push(...stamp(PLANT, cornerX, top))
   }
 
   const used: [number, number] = doorOnRight
     ? [room.ix0, cabinetX + CABINET.width]
     : [cabinetX, room.ix1]
-  out.push(...dressWalls(rng, room, used))
+  out.push(...dressWalls(rng, room, used, { pictures: 1, corner: false }))
   out.push(whiteboard(rng, room))
-  out.push(...fillRoom(rng, room, out, 3))
+  return out
+}
+
+/**
+ * The corridor, lined the way the one on the hand-drawn map is: runs of tub
+ * chairs down the wall with a tall plant standing between them.
+ *
+ * A corridor is the longest wall in the building and the only room nobody
+ * has any reason to stop in, which is exactly why it looks unfinished when
+ * it is left bare. The chairs are on the Chair layer, so they are somewhere
+ * to sit and wait rather than something to walk round.
+ */
+const HALL_RUN = 3
+
+function hallway(rng: Rng, room: Room): Placement[] {
+  const out: Placement[] = []
+  const rows = usableRows(room)
+  const clear = doorways(room)
+  // Whichever wall has fewer doors in it: every room off the corridor opens
+  // through one side of it, so seating that side is seating a wall that is
+  // mostly doorway.
+  const doorsOn = (x: number) => room.doors.filter((door) => door.x === x).length
+  const wall = doorsOn(room.x0) <= doorsOn(room.x1) ? room.ix0 : room.ix1
+  const seat = rng.pick(HALL_CHAIRS)
+
+  const free = (y: number, height: number) =>
+    y + height - 1 <= rows.to && !blocks(clear, wall, y, 1, height)
+
+  let y = rows.from + 1
+  let seated = 0
+  while (y <= rows.to) {
+    if (!free(y, 1)) {
+      // past a doorway the run starts again, so the chairs do not read as one
+      // long bench somebody has cut a hole in
+      seated = 0
+      y++
+      continue
+    }
+
+    // A run of chairs, then something green to break it up. The plant stands
+    // in a pot you bump into, so it needs its whole height clear of a doorway.
+    if (seated >= HALL_RUN) {
+      if (free(y, HALL_PLANT.height)) {
+        out.push(...stamp(HALL_PLANT, wall, y))
+        y += HALL_PLANT.height
+      } else {
+        y++
+      }
+      seated = 0
+      continue
+    }
+
+    out.push({
+      layer: 'Chair',
+      gid: seat,
+      tx: wall,
+      ty: y,
+      widthPx: TILE,
+      heightPx: TILE * 2,
+      direction: 'down',
+    })
+    seated++
+    y++
+  }
+
+  out.push(...dressWalls(rng, room, [room.ix1 + 1, room.ix1 + 1], { board: false, corner: false }))
   return out
 }
 
@@ -435,7 +519,22 @@ function fillRoom(rng: Rng, room: Room, placed: Placement[], limit: number): Pla
  * is off limits too - a water cooler pushed into a corner that happens to be
  * the way in is a water cooler nobody can get past.
  */
-function dressWalls(rng: Rng, room: Room, taken: [number, number], board = true): Placement[] {
+interface WallOptions {
+  /** false in a room whose only wall fitting is a window */
+  board?: boolean
+  /** how many pictures may be hung, at most */
+  pictures?: number
+  /** whether to stand something in whichever corner is still free */
+  corner?: boolean
+}
+
+function dressWalls(
+  rng: Rng,
+  room: Room,
+  taken: [number, number],
+  options: WallOptions = {}
+): Placement[] {
+  const { board = true, pictures = 3, corner = true } = options
   const out: Placement[] = []
   const rows = usableRows(room)
   const clear = doorways(room)
@@ -458,7 +557,7 @@ function dressWalls(rng: Rng, room: Room, taken: [number, number], board = true)
   // Pictures along the rest of it. A blank wall is what makes a room read as
   // unfinished however much furniture is standing in front of it.
   let hung = 0
-  for (let x = room.ix0; x <= room.ix1 && hung < 3;) {
+  for (let x = room.ix0; x <= room.ix1 && hung < pictures;) {
     const art = rng.pick(WALL_ART)
     const clashes =
       x + art.width - 1 > room.ix1 ||
@@ -474,6 +573,8 @@ function dressWalls(rng: Rng, room: Room, taken: [number, number], board = true)
       x++
     }
   }
+
+  if (!corner) return out
 
   const piece = rng.chance(0.4) && rows.to - 2 >= rows.from ? WATER_COOLER : PLANT
   const top = rows.to - piece.height + 1

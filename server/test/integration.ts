@@ -475,6 +475,10 @@ function spawnUnits() {
  * itself are the only thing standing between a bad roll and a room a player
  * cannot get out of. Run enough seeds that a one-in-a-hundred layout shows up.
  */
+/** the cabinet in a private office, and the tub chairs the corridor is lined with */
+const CABINET_GIDS = new Set([2918, 2919, 2934, 2935])
+const HALL_SEAT_GIDS = new Set([2573, 2574])
+
 /** the desk halves of a bench, so a test can tell a desk from a partition */
 const DESK_GIDS = new Set([3039, 3040, 3041, 3055, 3056, 3057, 2585, 2586, 2587, 2590, 2591, 2592])
 
@@ -626,6 +630,42 @@ function generatedOfficeUnits() {
       })
   })
   check('a private office desk faces its door, not a wall', desksFaceTheRoom, true)
+
+  // The drawn private office holds a desk, a sofa, one cabinet and two plants.
+  // The generated one used to be filled by the same pass that dresses every
+  // other room, which turned it into a furniture showroom.
+  const privateOfficesAreBare = [1, 6, 33, 4242].every((seed) => {
+    const { layout, map } = generateOffice({ seed })
+    const everything = (map.layers as Array<{ name: string; objects?: any[] }>).flatMap(
+      (layer) => layer.objects ?? []
+    )
+    return layout.rooms
+      .filter((room) => room.archetype === 'private')
+      .every((room) => {
+        const inside = everything.filter((object: any) => {
+          const x = object.x / 32
+          const y = object.y / 32 - 1
+          return x >= room.ix0 && x <= room.ix1 && y >= room.iy0 && y <= room.iy1
+        })
+        const cabinets = inside.filter((object: any) =>
+          CABINET_GIDS.has(object.gid & 0x1fffffff)
+        ).length
+        // four tiles to a cabinet, and the room is allowed exactly one
+        return cabinets <= CABINET_GIDS.size
+      })
+  })
+  check('a private office is furnished, not filled', privateOfficesAreBare, true)
+
+  // and the corridor is lined the way the drawn one is
+  const corridorHasSeating = [1, 6, 33, 4242].every((seed) => {
+    const { map } = generateOffice({ seed })
+    const chairs =
+      (map.layers as Array<{ name: string; objects?: any[] }>).find(
+        (layer) => layer.name === 'Chair'
+      )?.objects ?? []
+    return chairs.some((object: any) => HALL_SEAT_GIDS.has(object.gid & 0x1fffffff))
+  })
+  check('the corridor has somewhere to sit and wait', corridorHasSeating, true)
 
   // the spawn both the client and the server assume has to be standing room
   const spawnOnFloor = [1, 2, 3, 99].every((seed) => {
