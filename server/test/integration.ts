@@ -20,6 +20,7 @@ import { classicOfficeMap } from '../rooms/MapObjects'
 import { officeDrawingFor } from '../rooms/OfficeMaps'
 import { contentsOf, generateOffice } from '../office'
 import { OfficeSpec, parseOfficeId } from '../../types/Office'
+import { CLASSIC_SPAWN, readSpawn } from '../../types/Spawn'
 import { ItemType } from '../../types/Items'
 import RateLimiter from '../rooms/RateLimiter'
 import http from 'http'
@@ -340,6 +341,37 @@ async function roomTests() {
 }
 
 /**
+ * Reading a map's spawn.
+ *
+ * Tiled leaves the properties out of a map that has none - which the
+ * hand-drawn office does - and the two sides of the app are handed that
+ * absence in different shapes. Phaser turns it into an empty object, and
+ * calling .find() on that threw inside the game scene: the player was never
+ * built, and the only sign of it was setPlayerName failing at the login box.
+ */
+function spawnUnits() {
+  console.log('\nReading a spawn')
+
+  check('a map with no properties at all', readSpawn(undefined), CLASSIC_SPAWN)
+  check('the empty object Phaser hands back', readSpawn({}), CLASSIC_SPAWN)
+  check('an empty list', readSpawn([]), CLASSIC_SPAWN)
+  check(
+    'properties that do not mention a spawn',
+    readSpawn([{ name: 'mood', value: 'blue' }]),
+    CLASSIC_SPAWN
+  )
+  check(
+    'a generated map that records one',
+    readSpawn([
+      { name: 'spawnX', type: 'int', value: 688 },
+      { name: 'spawnY', type: 'int', value: 464 },
+    ]),
+    { x: 688, y: 464 }
+  )
+  check('half a spawn is no spawn', readSpawn([{ name: 'spawnX', value: 688 }]), CLASSIC_SPAWN)
+}
+
+/**
  * The generator draws an office nobody has looked at, so the checks it runs on
  * itself are the only thing standing between a bad roll and a room a player
  * cannot get out of. Run enough seeds that a one-in-a-hundred layout shows up.
@@ -570,6 +602,7 @@ async function generatedRoomTests() {
 
 async function main() {
   rateLimiterUnits()
+  spawnUnits()
   generatedOfficeUnits()
   await sleep(700)
   await matchmakingOriginTests()

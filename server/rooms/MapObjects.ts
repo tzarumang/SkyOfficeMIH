@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { ITEM_SPECS, ItemType, SHARED_ITEM_TYPES } from '../../types/Items'
+import { readSpawn } from '../../types/Spawn'
 
 /**
  * The client builds its items straight out of the Tiled map, keyed by the order
@@ -80,17 +81,7 @@ export interface OfficeMap {
   hasLineOfSight(from: { x: number; y: number }, to: { x: number; y: number }): boolean
 }
 
-/** the spawn the hand-drawn office has always used */
-export const CLASSIC_SPAWN = { x: 705, y: 500 }
-
-function readSpawn(map: TiledMap) {
-  const value = (name: string) =>
-    Number((map.properties ?? []).find((property) => property.name === name)?.value)
-
-  const x = value('spawnX')
-  const y = value('spawnY')
-  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : CLASSIC_SPAWN
-}
+export { CLASSIC_SPAWN } from '../../types/Spawn'
 
 /**
  * The tiles a player cannot walk through, read the way the client reads them:
@@ -174,7 +165,7 @@ export function officeMapFrom(map: TiledMap, id: string | null): OfficeMap {
   return {
     id,
     bounds: { width: map.width * map.tilewidth, height: map.height * map.tileheight },
-    spawn: readSpawn(map),
+    spawn: readSpawn(map.properties),
     boxes: (itemType) => boxes.get(itemType) ?? [],
     hasLineOfSight: (from, to) => {
       const fromTile = {
