@@ -18,6 +18,7 @@ import {
   WhiteboardRemoveUserCommand,
 } from './commands/WhiteboardUpdateArrayCommand'
 import ChatMessageUpdateCommand from './commands/ChatMessageUpdateCommand'
+import { isAvatar } from '../../types/Avatar'
 import OfficeStore, { SLUG_PATTERN } from './OfficeStore'
 
 /** one store for the process; offices outlive the rooms that run them */
@@ -193,6 +194,15 @@ export class SkyOffice extends Room<OfficeState> {
         client,
         name: message.name.slice(0, MAX_NAME_LENGTH),
       })
+    })
+
+    // the avatar is generated from this on every client, so only the
+    // descriptor travels - and only if it is one we recognise
+    this.onSafeMessage(Message.UPDATE_PLAYER_AVATAR, (client, message: { avatar: string }) => {
+      if (!isAvatar(message?.avatar)) return
+
+      const player = this.state.players.get(client.sessionId)
+      if (player) player.avatar = message.avatar
     })
 
     // when a player is ready to connect, call the PlayerReadyToConnectCommand

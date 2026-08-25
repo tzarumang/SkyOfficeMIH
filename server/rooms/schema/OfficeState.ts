@@ -13,6 +13,7 @@ export class Player extends Schema implements IPlayer {
   @type('number') x = 705
   @type('number') y = 500
   @type('string') anim = 'adam_idle_down'
+  @type('string') avatar = ''
   @type('boolean') readyToConnect = false
   @type('boolean') videoConnected = false
 }
