@@ -434,6 +434,52 @@ async function roomTests() {
  * calling .find() on that threw inside the game scene: the player was never
  * built, and the only sign of it was setPlayerName failing at the login box.
  */
+/**
+ * What a scene sees when it starts late.
+ *
+ * A player is announced as the first state update is decoded, which happens
+ * the moment the room is joined. The game scene does not start until the
+ * office has been drawn - and a generated office is fetched over http, so by
+ * the time anything is listening the announcements are long past. Nothing
+ * replays them, so the client reads the room instead, and this is the read it
+ * depends on: everyone already here, with their names, in the state.
+ */
+async function whoIsAlreadyHereTests() {
+  console.log('\nArriving after somebody else')
+  const client = new Client(endpoint)
+
+  const first = await client.create('custom', {
+    name: 'Ordering',
+    description: 'who sees whom',
+    password: null,
+    unlisted: true,
+    layout: 'generated',
+  })
+  first.send(Message.UPDATE_PLAYER_NAME, { name: 'Alpha' })
+  await sleep(300)
+
+  // second in, long after the first announced themselves
+  const second = await client.joinById(first.id, { password: null })
+  await sleep(400)
+
+  const seenBySecond = [...(second.state as any).players.entries()]
+    .filter(([id]: [string, any]) => id !== second.sessionId)
+    .map(([, player]: [string, any]) => player.name)
+
+  check('the one who arrived second can see the first', seenBySecond, ['Alpha'])
+
+  // and the first still sees the second once they are named
+  second.send(Message.UPDATE_PLAYER_NAME, { name: 'Beta' })
+  await sleep(300)
+  const seenByFirst = [...(first.state as any).players.entries()]
+    .filter(([id]: [string, any]) => id !== first.sessionId)
+    .map(([, player]: [string, any]) => player.name)
+  check('and the first can see the second', seenByFirst, ['Beta'])
+
+  await second.leave()
+  await first.leave()
+}
+
 function spawnUnits() {
   console.log('\nReading a spawn')
 
@@ -900,6 +946,7 @@ async function generatedRoomTests() {
 
 async function main() {
   rateLimiterUnits()
+  await whoIsAlreadyHereTests()
   spawnUnits()
   peerHostUnits()
   generatedOfficeUnits()
