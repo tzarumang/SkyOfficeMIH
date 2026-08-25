@@ -9,8 +9,13 @@ process.env.PORT = process.env.TEST_PORT || '2599'
 // so the matchmaking origin gate is active for the checks below
 process.env.ALLOWED_ORIGINS = 'http://allowed.example.test'
 // keep the office store out of the working tree
-process.env.OFFICE_STORE_PATH = require('path').join(require('os').tmpdir(), 'skyoffice-test-offices.json')
-try { require('fs').unlinkSync(process.env.OFFICE_STORE_PATH) } catch {}
+process.env.OFFICE_STORE_PATH = require('path').join(
+  require('os').tmpdir(),
+  'skyoffice-test-offices.json'
+)
+try {
+  require('fs').unlinkSync(process.env.OFFICE_STORE_PATH)
+} catch {}
 
 require('../index')
 
@@ -82,7 +87,11 @@ function rateLimiterUnits() {
   check('a burst is capped at the bucket capacity', allowed, 5)
   check('allowance comes back over time', limiter.consume('a', 3000), true)
   check('keys are independent', limiter.consume('b', 1000), true)
-  check('check() does not spend allowance', [limiter.check('c', 0), limiter.consume('c', 0)], [true, true])
+  check(
+    'check() does not spend allowance',
+    [limiter.check('c', 0), limiter.consume('c', 0)],
+    [true, true]
+  )
 
   const budget = new RateLimiter(150, 600)
   check('takeUpTo spends what it can', budget.takeUpTo('m', 400, 0), 150)
@@ -135,37 +144,60 @@ async function officeLifetimeTests() {
 
   // a disposable office dies with its room
   const throwaway = await client.create('custom', {
-    name: 'Throwaway', description: 'd', password: null, unlisted: false,
+    name: 'Throwaway',
+    description: 'd',
+    password: null,
+    unlisted: false,
   })
   const throwawayId = throwaway.id
   await throwaway.leave()
   await sleep(900)
   let gone = false
-  try { await client.joinById(throwawayId) } catch { gone = true }
+  try {
+    await client.joinById(throwawayId)
+  } catch {
+    gone = true
+  }
   check('a disposable office is gone once empty', gone, true)
 
   // an office with a lifetime comes back from its slug
   const officeSlug = slug()
   const kept = await client.create('custom', {
-    name: 'Design Team', description: 'kept', password: null, unlisted: true,
-    slug: officeSlug, lifetimeDays: 7,
+    name: 'Design Team',
+    description: 'kept',
+    password: null,
+    unlisted: true,
+    slug: officeSlug,
+    lifetimeDays: 7,
   })
   await kept.leave()
   await sleep(900)
 
   const reopened = await client.joinOrCreate('custom', { slug: officeSlug })
   await sleep(300)
-  check('an office with a lifetime reopens from its slug', (reopened.state as any) !== undefined, true)
+  check(
+    'an office with a lifetime reopens from its slug',
+    (reopened.state as any) !== undefined,
+    true
+  )
   const listed = await client.getAvailableRooms('custom')
-  check('and is still unlisted after reopening', listed.some((r) => r.roomId === reopened.id), false)
+  check(
+    'and is still unlisted after reopening',
+    listed.some((r) => r.roomId === reopened.id),
+    false
+  )
   await reopened.leave()
   await sleep(900)
 
   // the important one: reopening must not drop the password
   const lockedSlug = slug()
   const locked = await client.create('custom', {
-    name: 'Board Room', description: 'private', password: 'hunter2', unlisted: true,
-    slug: lockedSlug, lifetimeDays: 7,
+    name: 'Board Room',
+    description: 'private',
+    password: 'hunter2',
+    unlisted: true,
+    slug: lockedSlug,
+    lifetimeDays: 7,
   })
   await locked.leave()
   await sleep(900)
@@ -176,10 +208,15 @@ async function officeLifetimeTests() {
     const stolen = await client.joinOrCreate('custom', { slug: lockedSlug })
     hijacked = true
     await stolen.leave()
-  } catch { /* refused, which is the point */ }
+  } catch {
+    /* refused, which is the point */
+  }
   check('reopening a private office still demands its password', hijacked, false)
 
-  const withPassword = await client.joinOrCreate('custom', { slug: lockedSlug, password: 'hunter2' })
+  const withPassword = await client.joinOrCreate('custom', {
+    slug: lockedSlug,
+    password: 'hunter2',
+  })
   check('and the real password still opens it', typeof withPassword.id === 'string', true)
   await withPassword.leave()
 
@@ -189,7 +226,9 @@ async function officeLifetimeTests() {
     const ghost = await client.joinOrCreate('custom', { slug: slug() })
     invented = true
     await ghost.leave()
-  } catch { /* refused */ }
+  } catch {
+    /* refused */
+  }
   check('an unknown office link does not create one', invented, false)
 
   let malformed = false
@@ -197,7 +236,9 @@ async function officeLifetimeTests() {
     const bad = await client.joinOrCreate('custom', { slug: 'no', lifetimeDays: 7 })
     malformed = true
     await bad.leave()
-  } catch { /* refused */ }
+  } catch {
+    /* refused */
+  }
   check('a malformed slug is refused', malformed, false)
 }
 
@@ -251,7 +292,11 @@ async function roomTests() {
   }
   await sleep(200)
   const covered = walkFrom.x - positionOf(room).x
-  check('ordinary frame-by-frame walking is never trimmed', covered >= (walkFrom.x - asked) * 0.95, true)
+  check(
+    'ordinary frame-by-frame walking is never trimmed',
+    covered >= (walkFrom.x - asked) * 0.95,
+    true
+  )
 
   // one jump straight at a computer on the other side of the room.
   // positionOf returns the live schema object, so these have to be snapshots.
@@ -285,7 +330,11 @@ async function roomTests() {
 
   console.log('\nWhiteboard ids')
   const ids = [...(room.state as any).whiteboards.values()].map((w: any) => w.roomId)
-  check('are 128 bits of base64url', ids.every((id: string) => /^[A-Za-z0-9_-]{22}$/.test(id)), true)
+  check(
+    'are 128 bits of base64url',
+    ids.every((id: string) => /^[A-Za-z0-9_-]{22}$/.test(id)),
+    true
+  )
   check('are all distinct', new Set(ids).size, ids.length)
 
   const publicId = room.id
@@ -297,7 +346,12 @@ async function roomTests() {
   check('the public lobby survives being empty', publicAgain.id, publicId)
   await publicAgain.leave()
 
-  const temp = await client.create('custom', { name: 'temp', description: 'temp', password: null, unlisted: false })
+  const temp = await client.create('custom', {
+    name: 'temp',
+    description: 'temp',
+    password: null,
+    unlisted: false,
+  })
   const tempId = temp.id
   await temp.leave()
   await sleep(900)
@@ -330,7 +384,11 @@ async function roomTests() {
   })
   await sleep(400)
   const rooms = await client.getAvailableRooms('custom')
-  check('an unlisted room is not listed', rooms.some((r) => r.roomId === hidden.id), false)
+  check(
+    'an unlisted room is not listed',
+    rooms.some((r) => r.roomId === hidden.id),
+    false
+  )
   const rejoined = await client.joinById(hidden.id)
   check('an unlisted room is still joinable by id', rejoined.id, hidden.id)
   await rejoined.leave()
@@ -352,8 +410,16 @@ async function roomTests() {
       codes.push(error.code)
     }
   }
-  check('wrong passwords are rejected', codes.slice(0, 5).every((code) => code === 403), true)
-  check('guessing is throttled after the burst', codes.slice(5).every((code) => code === 429), true)
+  check(
+    'wrong passwords are rejected',
+    codes.slice(0, 5).every((code) => code === 403),
+    true
+  )
+  check(
+    'guessing is throttled after the burst',
+    codes.slice(5).every((code) => code === 429),
+    true
+  )
   await locked.leave()
 }
 
@@ -397,7 +463,11 @@ function spawnUnits() {
     CLIENT_LAYERS.filter((name) => !present.includes(name)),
     []
   )
-  check('and records no spawn of its own, so it falls back', readSpawn(classic.properties), CLASSIC_SPAWN)
+  check(
+    'and records no spawn of its own, so it falls back',
+    readSpawn(classic.properties),
+    CLASSIC_SPAWN
+  )
 }
 
 /**
@@ -405,6 +475,9 @@ function spawnUnits() {
  * itself are the only thing standing between a bad roll and a room a player
  * cannot get out of. Run enough seeds that a one-in-a-hundred layout shows up.
  */
+/** the desk halves of a bench, so a test can tell a desk from a partition */
+const DESK_GIDS = new Set([3039, 3040, 3041, 3055, 3056, 3057, 2585, 2586, 2587, 2590, 2591, 2592])
+
 function generatedOfficeUnits() {
   console.log('\nGenerated offices')
 
@@ -485,6 +558,75 @@ function generatedOfficeUnits() {
   })
   check('desks are benched back to back, a chair each side', benchesAreBacked, true)
 
+  // A bench is a partition with a desk on whichever side somebody sits, so a
+  // floor that seats an odd number must not draw the desk nobody is at - and a
+  // screen only fits on the near desk, the far one being a single row.
+  const nothingUnattended = [3, 11, 25, 4242].every((seed) => {
+    const spec = { meetingRooms: 1, oneOnOneRooms: 1, computerDesks: 5, plainDesks: 6, lounges: 1 }
+    const { layout, map } = generateOffice({ seed, spec })
+    const at = (object: any) => `${object.x / 32},${object.y / 32 - 1}`
+    const layers = map.layers as Array<{ name: string; objects?: any[] }>
+
+    const seated = new Set<string>()
+    const nearSurface = new Set<string>()
+    for (const slot of layout.deskSlots) {
+      const top = slot.facing === 'up' ? slot.y : slot.y - 1
+      for (let dx = 0; dx < 3; dx++) {
+        seated.add(`${slot.x + dx},${top}`)
+        seated.add(`${slot.x + dx},${top + 1}`)
+      }
+      if (slot.facing === 'up') nearSurface.add(`${slot.x},${slot.y + 1}`)
+    }
+
+    for (const layer of layers) {
+      for (const object of layer.objects ?? []) {
+        if (DESK_GIDS.has(object.gid & 0x1fffffff) && !seated.has(at(object))) return false
+      }
+    }
+
+    const screens = layers.find((layer) => layer.name === 'Computer')?.objects ?? []
+    if (screens.length !== spec.computerDesks) return false
+    return screens.every((screen: any) => nearSurface.has(at(screen)))
+  })
+  check('no desk is drawn without somebody at it', nothingUnattended, true)
+
+  // The desk in a private office has to face the room it is in. The seat is on
+  // the far side of it from the door, looking back at the way in - which for
+  // half the rooms means the desk is drawn mirrored.
+  const desksFaceTheRoom = [2, 9, 40, 4242].every((seed) => {
+    const { layout, map } = generateOffice({ seed })
+    const chairs =
+      (map.layers as Array<{ name: string; objects?: any[] }>).find(
+        (layer) => layer.name === 'Chair'
+      )?.objects ?? []
+
+    return layout.rooms
+      .filter((room) => room.archetype === 'private')
+      .every((room) => {
+        const seat = chairs.find((object: any) => {
+          const direction = (object.properties ?? []).find(
+            (p: any) => p.name === 'direction'
+          )?.value
+          const x = object.x / 32
+          const y = object.y / 32 - 1
+          return (
+            (direction === 'left' || direction === 'right') &&
+            x >= room.ix0 &&
+            x <= room.ix1 &&
+            y >= room.iy0 &&
+            y <= room.iy1
+          )
+        })
+        if (!seat) return false
+
+        // it must be looking towards the door, not away from it
+        const direction = (seat.properties ?? []).find((p: any) => p.name === 'direction')?.value
+        const doorOnRight = room.doors.some((door) => door.x === room.x1)
+        return direction === (doorOnRight ? 'right' : 'left')
+      })
+  })
+  check('a private office desk faces its door, not a wall', desksFaceTheRoom, true)
+
   // the spawn both the client and the server assume has to be standing room
   const spawnOnFloor = [1, 2, 3, 99].every((seed) => {
     const { layout } = generateOffice({ seed })
@@ -547,7 +689,10 @@ async function generatedRoomTests() {
 
   // a generated office reports the seed it was grown from
   const generated = await client.create('custom', {
-    name: 'Generated', description: 'fresh', password: null, unlisted: false,
+    name: 'Generated',
+    description: 'fresh',
+    password: null,
+    unlisted: false,
     layout: 'generated',
   })
   await sleep(300)
@@ -556,9 +701,8 @@ async function generatedRoomTests() {
 
   // and the room really is running that office, not the hand-drawn one
   const drawing = officeDrawingFor(officeId)
-  const computersInDrawing = (drawing.layers as any[]).find(
-    (layer) => layer.name === 'Computer'
-  ).objects.length
+  const computersInDrawing = (drawing.layers as any[]).find((layer) => layer.name === 'Computer')
+    .objects.length
   check(
     'its items come from its own floor plan',
     (generated.state as any).computers.size,
@@ -568,8 +712,13 @@ async function generatedRoomTests() {
 
   // a client must not be able to name the office it lands in
   const asked = await client.create('custom', {
-    name: 'Asking', description: 'x', password: null, unlisted: false,
-    layout: 'generated', mapId: '1234-1-1-1-1-1', officeId: '1234-1-1-1-1-1',
+    name: 'Asking',
+    description: 'x',
+    password: null,
+    unlisted: false,
+    layout: 'generated',
+    mapId: '1234-1-1-1-1-1',
+    officeId: '1234-1-1-1-1-1',
   })
   await sleep(300)
   check(
@@ -582,8 +731,13 @@ async function generatedRoomTests() {
   // the floor plan has to survive the office being emptied and reopened
   const officeSlug = slug()
   const first = await client.create('custom', {
-    name: 'Studio', description: 'kept', password: null, unlisted: true,
-    layout: 'generated', slug: officeSlug, lifetimeDays: 7,
+    name: 'Studio',
+    description: 'kept',
+    password: null,
+    unlisted: true,
+    layout: 'generated',
+    slug: officeSlug,
+    lifetimeDays: 7,
   })
   await sleep(300)
   const firstId = (first.state as any).mapId
@@ -598,11 +752,7 @@ async function generatedRoomTests() {
   // the drawing itself, which the client fetches over http
   const served = await getJson(`/office/map/${firstId}.json`)
   check('the floor plan is served', served.status, 200)
-  check(
-    'and it is a Tiled map with every layer the client reads',
-    served.body?.type,
-    'map'
-  )
+  check('and it is a Tiled map with every layer the client reads', served.body?.type, 'map')
   check(
     'and the same seed always serves the same drawing',
     JSON.stringify(served.body) === JSON.stringify(officeDrawingFor(firstId)),
@@ -623,8 +773,12 @@ async function generatedRoomTests() {
     lounges: 1,
   }
   const built = await client.create('custom', {
-    name: 'To Order', description: 'counted', password: null, unlisted: false,
-    layout: 'generated', office: ordered,
+    name: 'To Order',
+    description: 'counted',
+    password: null,
+    unlisted: false,
+    layout: 'generated',
+    office: ordered,
   })
   await sleep(300)
   const builtId = (built.state as any).mapId
@@ -647,11 +801,7 @@ async function generatedRoomTests() {
       desks: 12,
     }
   )
-  check(
-    'and the server tracks that many screen shares',
-    (built.state as any).computers.size,
-    7
-  )
+  check('and the server tracks that many screen shares', (built.state as any).computers.size, 7)
   await built.leave()
 }
 
