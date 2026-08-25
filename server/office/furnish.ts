@@ -225,7 +225,16 @@ function oneOnOneRoom(rng: Rng, room: Room): Placement[] {
   const cols = usableColumns(room)
   const clear = doorways(room)
   const doorOnRight = room.doors.some((door) => door.x === room.x1)
-  const deskX = doorOnRight ? cols.from : cols.to - CORNER_DESK.width + 1
+
+  /**
+   * And it stands a column clear of the end wall, because the seat is not
+   * something you sit down onto from above: the desk has an alcove cut into
+   * one side, and that side is the only way in or out of it. Pushed hard
+   * against the wall the alcove faces, the seat is walled in - a chair drawn
+   * in a box nobody can reach, which is what the drawn office avoids by
+   * leaving floor on that side too.
+   */
+  const deskX = doorOnRight ? cols.from + 1 : cols.to - CORNER_DESK.width
 
   // Bottom of the room by preference, sliding up until it is clear of the way
   // in - the doorway is on the same side of the room as one end of the desk.
@@ -390,6 +399,17 @@ function lounge(rng: Rng, room: Room): Placement[] {
   const POOL = { width: POOL_TABLE.width, gap: 2 }
   const SEATED_COUCH = { width: COUCH.width + 2, gap: 2 }
 
+  // Every solid thing in here has to leave the room in one piece: a lounge
+  // is short, and a pool table with a vending machine above it reaches from
+  // wall to wall.
+  const solid = new Set<string>()
+  const standsClear = (piece: Prefab, px: number, py: number) => {
+    const footprint = solidFootprint(piece, px, py)
+    if (wouldSplitRoom(room, solid, footprint)) return false
+    for (const cell of footprint) solid.add(cell)
+    return true
+  }
+
   let x = cols.from + 1
   let wantsTable = true
   while (x <= cols.to) {
@@ -403,25 +423,43 @@ function lounge(rng: Rng, room: Room): Placement[] {
     if (asTable === undefined) break
 
     if (asTable) {
-      out.push(...stamp(POOL_TABLE, x, top))
+      if (standsClear(POOL_TABLE, x, top)) out.push(...stamp(POOL_TABLE, x, top))
       x += POOL.width + POOL.gap
     } else {
-      out.push(...stamp(COUCH, x + 1, top))
-      out.push(chair('right', x, top + 1))
-      out.push(chair('left', x + 1 + COUCH.width, top + 1))
+      if (standsClear(COUCH, x + 1, top)) {
+        out.push(...stamp(COUCH, x + 1, top))
+        out.push(chair('right', x, top + 1))
+        out.push(chair('left', x + 1 + COUCH.width, top + 1))
+      }
       x += SEATED_COUCH.width + SEATED_COUCH.gap
     }
     wantsTable = !asTable
   }
 
-  out.push({
-    layer: 'VendingMachine',
-    gid: VENDING_GID,
-    tx: cols.from + 1,
-    ty: rows.from,
-    widthPx: 48,
-    heightPx: 72,
-  })
+  // The machine everyone actually comes for, in the first spot along the
+  // back wall that does not put it in line with what is already down.
+  const VENDING = { width: 2, height: 3 }
+  for (let vx = cols.from; vx <= cols.to - VENDING.width + 1; vx++) {
+    const footprint: string[] = []
+    for (let dy = 0; dy < VENDING.height; dy++) {
+      for (let dx = 0; dx < VENDING.width; dx++) {
+        footprint.push(`${vx + dx},${rows.from - VENDING.height + 1 + dy}`)
+      }
+    }
+    if (footprint.some((cell) => solid.has(cell))) continue
+    if (wouldSplitRoom(room, solid, footprint)) continue
+
+    for (const cell of footprint) solid.add(cell)
+    out.push({
+      layer: 'VendingMachine',
+      gid: VENDING_GID,
+      tx: vx,
+      ty: rows.from,
+      widthPx: 48,
+      heightPx: 72,
+    })
+    break
+  }
 
   // The tables run the length of the room at the same rows a decoration would
   // want, so what is left over is whatever the loop above did not reach.
@@ -442,6 +480,96 @@ function occupied(placed: Placement[]): Set<string> {
     }
   }
   return cells
+}
+
+/** the layers the client stops a player on */
+const SOLID_PLACEMENT_LAYERS = new Set([
+  'ObjectsOnCollide',
+  'GenericObjectsOnCollide',
+  'Basement',
+  'VendingMachine',
+])
+
+/** every tile a player is stopped by */
+function solidCells(placed: Placement[]): Set<string> {
+  const cells = new Set<string>()
+  for (const piece of placed) {
+    if (!SOLID_PLACEMENT_LAYERS.has(piece.layer)) continue
+    const width = Math.max(1, Math.round(piece.widthPx / TILE))
+    const height = Math.max(1, Math.round(piece.heightPx / TILE))
+    for (let dy = 0; dy < height; dy++) {
+      for (let dx = 0; dx < width; dx++) cells.add(`${piece.tx + dx},${piece.ty - dy}`)
+    }
+  }
+  return cells
+}
+
+/**
+ * Which of a room's tiles can be walked to from its doorway, given what is
+ * standing in it. A room is a carved rectangle, so its interior is floor and
+ * only the furniture can be in the way.
+ */
+function walkRoom(room: Room, blocked: Set<string>): Set<string> {
+  const start = room.doors
+    .map((door) => ({
+      x: door.x <= room.x0 ? room.ix0 : door.x >= room.x1 ? room.ix1 : door.x,
+      y: Math.min(Math.max(door.y, room.iy0), room.iy1),
+    }))
+    .find((tile) => !blocked.has(`${tile.x},${tile.y}`))
+
+  const reached = new Set<string>()
+  if (!start) return reached
+
+  const queue = [start]
+  reached.add(`${start.x},${start.y}`)
+  while (queue.length > 0) {
+    const { x, y } = queue.pop()!
+    for (const next of [
+      { x: x + 1, y },
+      { x: x - 1, y },
+      { x, y: y + 1 },
+      { x, y: y - 1 },
+    ]) {
+      if (next.x < room.ix0 || next.x > room.ix1) continue
+      if (next.y < room.iy0 || next.y > room.iy1) continue
+      const key = `${next.x},${next.y}`
+      if (reached.has(key) || blocked.has(key)) continue
+      reached.add(key)
+      queue.push(next)
+    }
+  }
+  return reached
+}
+
+/** the tiles a prefab would make solid if it were stamped at (x, y) */
+function solidFootprint(piece: Prefab, x: number, y: number): string[] {
+  return piece.parts
+    .filter((part) => SOLID_PLACEMENT_LAYERS.has(part.layer))
+    .map((part) => `${x + part.dx},${y + part.dy}`)
+}
+
+/**
+ * Would putting this here cut the room in two?
+ *
+ * Rooms are furnished piece by piece, and no piece is wide enough to wall a
+ * room off on its own - but two of them in the same columns are. A vending
+ * machine against the top wall and a pool table below it stood in one line
+ * across a five-row lounge, and everything past them was floor nobody could
+ * reach. Nothing looked wrong: each piece was against a wall, on the floor,
+ * clear of the door.
+ */
+function wouldSplitRoom(room: Room, solid: Set<string>, adding: string[]): boolean {
+  const blocked = new Set(solid)
+  for (const cell of adding) blocked.add(cell)
+
+  const reached = walkRoom(room, blocked)
+  for (let y = room.iy0; y <= room.iy1; y++) {
+    for (let x = room.ix0; x <= room.ix1; x++) {
+      const key = `${x},${y}`
+      if (!blocked.has(key) && !reached.has(key)) return true
+    }
+  }
+  return false
 }
 
 /** what a room stands against its walls once the big thing in it is down */
@@ -490,16 +618,30 @@ function fillRoom(rng: Rng, room: Room, placed: Placement[], limit: number): Pla
   const bands: Array<(piece: Prefab) => number> = [() => rows.from]
   if (rows.to - rows.from + 1 >= 5) bands.push((piece) => rows.to - piece.height + 1)
 
+  /**
+   * Nothing may be stood anywhere that walls somebody in.
+   *
+   * A room is furnished around one big solid thing, and the seats at it are
+   * often in a one-tile strip between that thing and a wall. Drop a cabinet
+   * across the end of the strip and the chairs behind a meeting table become
+   * a row nobody can reach - which is what this used to do. A room is small
+   * enough to walk in full for every candidate, so it is walked.
+   */
+  const solid = solidCells(placed)
+  const strands = (piece: Prefab, x: number, y: number) =>
+    wouldSplitRoom(room, solid, solidFootprint(piece, x, y))
+
   let standing = 0
   for (const band of bands) {
     for (let x = cols.from; x <= cols.to && standing < limit;) {
       const piece = rng.pick(FILLERS)
       const y = band(piece)
-      if (free(piece, x, y) && rng.chance(0.5)) {
+      if (free(piece, x, y) && !strands(piece, x, y) && rng.chance(0.5)) {
         out.push(...stamp(piece, x, y))
         for (let dy = 0; dy < piece.height; dy++) {
           for (let dx = 0; dx < piece.width; dx++) taken.add(`${x + dx},${y + dy}`)
         }
+        for (const cell of solidFootprint(piece, x, y)) solid.add(cell)
         standing++
         // a gap either side, so the wall reads as furnished and not stacked
         x += piece.width + 1
