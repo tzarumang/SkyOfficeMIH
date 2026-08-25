@@ -2,16 +2,23 @@ import { Rng } from './rng'
 import { Layout, Room, styleKeyOf } from './layout'
 import { OfficeSpec } from '../../types/Office'
 import {
+  BOOKCASE,
+  BOXES,
   CABINET,
   CHAIRS,
   ChairDirection,
   COMPUTER_GIDS,
   CORNER_DESK,
   COUCH,
-  DESK,
+  CUBICLE_DIVIDER,
+  DESK_BENCH,
+  DESK_BENCH_FAR,
+  DESK_CHAIRS,
+  DESK_CLUTTER,
   PLANT,
   POOL_TABLE,
   Prefab,
+  PRINTER,
   SOFA_SEATS,
   STYLES,
   TABLE,
@@ -54,9 +61,22 @@ export function furnish(rng: Rng, layout: Layout, spec: OfficeSpec): Placement[]
     rng.shuffle(layout.deskSlots.map((_, index) => index)).slice(0, spec.computerDesks)
   )
 
+  // Two desks share a bench, so the bench itself is stamped once and each
+  // desk only brings its own chair and its own things.
+  const benches = new Map<string, Array<{ facing: 'up' | 'down'; computer: boolean }>>()
   layout.deskSlots.forEach((slot, index) => {
-    out.push(...desk(rng, slot.x, slot.y, withComputer.has(index)))
+    const key = `${slot.x},${slot.y}`
+    const seats = benches.get(key) ?? []
+    seats.push({ facing: slot.facing, computer: withComputer.has(index) })
+    benches.set(key, seats)
   })
+  for (const [key, seats] of benches) {
+    const [x, y] = key.split(',').map(Number)
+    out.push(...deskBench(rng, x, y, seats))
+  }
+
+  const floor = layout.rooms.find((room) => room.archetype === 'open')
+  if (floor) out.push(...floorExtras(rng, layout, floor))
 
   // --- the rooms ------------------------------------------------------------
   for (const room of layout.rooms) {
@@ -150,6 +170,7 @@ function meetingRoom(rng: Rng, room: Room): Placement[] {
   out.push(chair('left', tx + tableWidth, ty + 2))
   out.push(...dressWalls(rng, room, [tx - 1, tx + tableWidth]))
   out.push(whiteboard(rng, room))
+  out.push(...fillRoom(rng, room, out, 3))
 
   return out
 }
@@ -219,6 +240,7 @@ function oneOnOneRoom(rng: Rng, room: Room): Placement[] {
     : [deskX, room.ix1]
   out.push(...dressWalls(rng, room, used))
   out.push(whiteboard(rng, room))
+  out.push(...fillRoom(rng, room, out, 3))
   return out
 }
 
@@ -235,24 +257,33 @@ function lounge(rng: Rng, room: Room): Placement[] {
   // A pool table and then a couch, over and over for as long as the room
   // lasts - which is how the games room of the hand-drawn map is arranged, and
   // stops a big lounge being nothing but pool tables.
+  // A couch needs a seat either side of it, so it asks for two more columns
+  // than it is wide.
+  const POOL = { width: POOL_TABLE.width, gap: 2 }
+  const SEATED_COUCH = { width: COUCH.width + 2, gap: 2 }
+
   let x = cols.from + 1
   let wantsTable = true
-  while (x < cols.to) {
-    const piece = wantsTable ? POOL_TABLE : COUCH
-    // a couch needs a seat either side of it, so it asks for two more columns
-    const needed = wantsTable ? piece.width : piece.width + 2
-    if (x + needed > cols.to) break
+  while (x <= cols.to) {
+    // Whichever of the two fits, preferring the one whose turn it is. Giving
+    // up the moment the piece on the rota does not fit is what used to leave
+    // half a lounge bare.
+    const order: boolean[] = wantsTable ? [true, false] : [false, true]
+    const asTable = order.find(
+      (wants: boolean) => x + (wants ? POOL.width : SEATED_COUCH.width) - 1 <= cols.to
+    )
+    if (asTable === undefined) break
 
-    if (wantsTable) {
+    if (asTable) {
       out.push(...stamp(POOL_TABLE, x, top))
-      x += POOL_TABLE.width + 2
+      x += POOL.width + POOL.gap
     } else {
       out.push(...stamp(COUCH, x + 1, top))
       out.push(chair('right', x, top + 1))
       out.push(chair('left', x + 1 + COUCH.width, top + 1))
-      x += COUCH.width + 4
+      x += SEATED_COUCH.width + SEATED_COUCH.gap
     }
-    wantsTable = !wantsTable
+    wantsTable = !asTable
   }
 
   out.push({
@@ -267,6 +298,88 @@ function lounge(rng: Rng, room: Room): Placement[] {
   // The tables run the length of the room at the same rows a decoration would
   // want, so what is left over is whatever the loop above did not reach.
   out.push(...dressWalls(rng, room, [cols.from, x]))
+  // A lounge is the room people are meant to linger in, so it gets the most.
+  out.push(...fillRoom(rng, room, out, 6))
+  return out
+}
+
+/** every tile a placement covers, so nothing is stood on top of anything */
+function occupied(placed: Placement[]): Set<string> {
+  const cells = new Set<string>()
+  for (const piece of placed) {
+    const width = Math.max(1, Math.round(piece.widthPx / TILE))
+    const height = Math.max(1, Math.round(piece.heightPx / TILE))
+    for (let dy = 0; dy < height; dy++) {
+      for (let dx = 0; dx < width; dx++) cells.add(`${piece.tx + dx},${piece.ty - dy}`)
+    }
+  }
+  return cells
+}
+
+/** what a room stands against its walls once the big thing in it is down */
+const FILLERS: Prefab[] = [BOOKCASE, CABINET, PLANT, WATER_COOLER]
+
+/**
+ * Whatever wall a room has left over.
+ *
+ * Each room is furnished around one idea - a table, a desk, a pool table -
+ * and that leaves most of the wall doing nothing, which is what makes a
+ * generated room read as unfinished next to a drawn one. This walks the back
+ * wall and then the front and stands something against whatever is still
+ * clear. It works off the footprints of what is already placed rather than a
+ * range of columns, so it cannot put a plant inside a sofa.
+ */
+function fillRoom(rng: Rng, room: Room, placed: Placement[], limit: number): Placement[] {
+  const out: Placement[] = []
+  const rows = usableRows(room)
+  const cols = usableColumns(room)
+  const taken = occupied(placed)
+  for (const cell of doorways(room)) taken.add(cell)
+
+  // The whiteboard hangs on the wall, so nothing already placed occupies the
+  // floor in front of it - but that floor is where you have to stand to use it,
+  // and a cabinet pushed under a board is a board nobody can reach.
+  const board = placed.find((piece) => piece.layer === 'Whiteboard')
+  if (board) {
+    const wide = Math.max(1, Math.round(board.widthPx / TILE))
+    for (let dx = 0; dx < wide; dx++) taken.add(`${board.tx + dx},${board.ty + 1}`)
+  }
+
+  const free = (piece: Prefab, x: number, y: number) => {
+    if (x < cols.from || x + piece.width - 1 > cols.to) return false
+    if (y < rows.from || y + piece.height - 1 > rows.to) return false
+    for (let dy = 0; dy < piece.height; dy++) {
+      for (let dx = 0; dx < piece.width; dx++) {
+        if (taken.has(`${x + dx},${y + dy}`)) return false
+      }
+    }
+    return true
+  }
+
+  // The back wall is the one you look at from the door, so it is dressed
+  // first. The front wall is only used in a room deep enough that a piece
+  // against it still leaves floor to walk on.
+  const bands: Array<(piece: Prefab) => number> = [() => rows.from]
+  if (rows.to - rows.from + 1 >= 5) bands.push((piece) => rows.to - piece.height + 1)
+
+  let standing = 0
+  for (const band of bands) {
+    for (let x = cols.from; x <= cols.to && standing < limit;) {
+      const piece = rng.pick(FILLERS)
+      const y = band(piece)
+      if (free(piece, x, y) && rng.chance(0.5)) {
+        out.push(...stamp(piece, x, y))
+        for (let dy = 0; dy < piece.height; dy++) {
+          for (let dx = 0; dx < piece.width; dx++) taken.add(`${x + dx},${y + dy}`)
+        }
+        standing++
+        // a gap either side, so the wall reads as furnished and not stacked
+        x += piece.width + 1
+      } else {
+        x++
+      }
+    }
+  }
   return out
 }
 
@@ -301,7 +414,7 @@ function dressWalls(rng: Rng, room: Room, taken: [number, number], board = true)
   // Pictures along the rest of it. A blank wall is what makes a room read as
   // unfinished however much furniture is standing in front of it.
   let hung = 0
-  for (let x = room.ix0; x <= room.ix1 && hung < 3; ) {
+  for (let x = room.ix0; x <= room.ix1 && hung < 3;) {
     const art = rng.pick(WALL_ART)
     const clashes =
       x + art.width - 1 > room.ix1 ||
@@ -376,32 +489,101 @@ function stamp(piece: Prefab, x: number, y: number): Placement[] {
 }
 
 /**
- * One desk: a top, a body to bump into, sometimes a screen, and the chair
- * pulled up to it. Offsets copied from the hand-drawn map, columns 36-38.
+ * One desk: a top, a body to bump into, whatever is on it, and the chair pulled
+ * up to it. Offsets copied from the hand-drawn map, columns 36-38.
+ *
+ * A desk with nothing on it reads as furniture rather than as somebody's. The
+ * hand-drawn floor layers screens and papers over almost every desk it has, and
+ * only a handful of those are the screens you can actually share - so the rest
+ * of ours get the same clutter, just not the interactive kind.
  */
-function desk(rng: Rng, x: number, y: number, withComputer: boolean): Placement[] {
+/**
+ * A bench of two desks, back to back, the way the hand-drawn floor builds its
+ * production room: the two desk sprites stamped over each other so the bank
+ * reads as one piece of furniture, a chair on each side of it, and whatever
+ * the people sitting there have left on it.
+ */
+function deskBench(
+  rng: Rng,
+  x: number,
+  y: number,
+  seats: Array<{ facing: 'up' | 'down'; computer: boolean }>
+): Placement[] {
   const out: Placement[] = []
-  for (let i = 0; i < DESK.width; i++) {
-    out.push(tile('Objects', DESK.top[i], x + i, y))
-    out.push(tile('ObjectsOnCollide', DESK.body[i], x + i, y + 1))
+  out.push(...stamp(DESK_BENCH, x, y))
+  out.push(...stamp(DESK_BENCH_FAR, x, y))
+
+  // the partition at the end of the bank, three rows so it reaches the floor
+  out.push(...stamp(CUBICLE_DIVIDER, x - 1, y - 1))
+
+  for (const seat of seats) {
+    const near = seat.facing === 'up'
+    if (seat.computer) {
+      // The screen stands on the half of the bench its owner sits at: on the
+      // near rows for the chair below, the far rows for the chair above.
+      out.push({
+        layer: 'Computer',
+        gid: rng.pick(COMPUTER_GIDS),
+        tx: x,
+        ty: near ? y + 1 : y,
+        widthPx: 96,
+        heightPx: 64,
+      })
+    } else if (!near && rng.chance(0.6)) {
+      // Clutter only goes on the far half - the near half is where the screen
+      // would be, and two sets of things on one desk reads as a junk pile.
+      out.push(...stamp(rng.pick(DESK_CLUTTER), x, y - 1))
+    }
+    out.push(deskChair(near ? 'up' : 'down', x + 1, near ? y + 2 : y - 1))
+  }
+  return out
+}
+
+/**
+ * The things a floor has that are nobody's desk: the printer everyone walks to,
+ * and the boxes nobody has unpacked. They go in the corners the desk grid does
+ * not reach, which is where they end up in a real office too.
+ */
+function floorExtras(rng: Rng, layout: Layout, floor: Room): Placement[] {
+  const out: Placement[] = []
+  const clear = doorways(floor)
+  const taken = new Set<string>()
+  for (const slot of layout.deskSlots) {
+    for (let dy = -1; dy <= 3; dy++) {
+      for (let dx = -1; dx <= DESK_BENCH.width; dx++) taken.add(`${slot.x + dx},${slot.y + dy}`)
+    }
   }
 
-  // The screen stands on the desk, so it covers the desk's own two rows - its
-  // base on the front edge. A row lower and it is standing on the floor in
-  // front of the desk, which is where it used to be.
-  if (withComputer) {
-    out.push({
-      layer: 'Computer',
-      gid: rng.pick(COMPUTER_GIDS),
-      tx: x,
-      ty: y + 1,
-      widthPx: 96,
-      heightPx: 64,
-    })
+  const free = (piece: Prefab, x: number, y: number) => {
+    if (x < floor.ix0 || x + piece.width - 1 > floor.ix1) return false
+    if (y < floor.iy0 + 1 || y + piece.height - 1 > floor.iy1) return false
+    if (blocks(clear, x, y, piece.width, piece.height)) return false
+
+    for (let dy = 0; dy < piece.height; dy++) {
+      for (let dx = 0; dx < piece.width; dx++) {
+        if (taken.has(`${x + dx},${y + dy}`)) return false
+      }
+    }
+    return true
   }
 
-  // and the chair is pulled up to that front edge, not left a row adrift
-  out.push(chair('up', x + 1, y + 2))
+  // bottom left and bottom right, the two corners a grid of desks leaves over
+  for (const piece of [PRINTER, BOXES, BOOKCASE, PLANT]) {
+    const spots = [
+      { x: floor.ix0 + 1, y: floor.iy1 - piece.height + 1 },
+      { x: floor.ix1 - piece.width, y: floor.iy1 - piece.height + 1 },
+      { x: floor.ix0 + 1, y: floor.iy0 + 2 },
+      { x: floor.ix1 - piece.width, y: floor.iy0 + 2 },
+    ]
+    const spot = rng.shuffle(spots).find((candidate) => free(piece, candidate.x, candidate.y))
+    if (!spot) continue
+
+    out.push(...stamp(piece, spot.x, spot.y))
+    for (let dy = 0; dy < piece.height; dy++) {
+      for (let dx = 0; dx < piece.width; dx++) taken.add(`${spot.x + dx},${spot.y + dy}`)
+    }
+  }
+
   return out
 }
 
@@ -431,6 +613,11 @@ function whiteboard(rng: Rng, room: Room): Placement {
 
 function tile(layer: string, gid: number, tx: number, ty: number): Placement {
   return { layer, gid, tx, ty, widthPx: TILE, heightPx: TILE }
+}
+
+/** the desk-bank chair, which is not the chair the meeting rooms use */
+function deskChair(direction: 'up' | 'down', tx: number, ty: number): Placement {
+  return { ...chair(direction, tx, ty), gid: DESK_CHAIRS[direction] ?? CHAIRS[direction] }
 }
 
 function chair(direction: ChairDirection, tx: number, ty: number): Placement {

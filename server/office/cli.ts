@@ -1,11 +1,13 @@
 import fs from 'fs'
 import path from 'path'
 import { describe, generateOffice } from './index'
+import { clampOfficeSpec, OFFICE_SPEC_FIELDS, OfficeSpec } from '../../types/Office'
 
 /**
  * Draws an office and writes it out as a Tiled map.
  *
  *   yarn office:generate --seed 7
+ *   yarn office:generate --seed 7 --meetingRooms 3 --plainDesks 24
  *   yarn office:generate --seed 7 --out client/public/assets/map/map.json
  *
  * Pointing --out at map.json replaces the office the whole app runs in, since
@@ -27,7 +29,24 @@ const out = path.resolve(
   flag('out', path.join('client', 'public', 'assets', 'map', 'generated.json'))!
 )
 
-const office = generateOffice({ seed })
+// Whatever of the spec was asked for on the command line; the rest is left
+// at the default, so `--seed 7` alone still draws an office.
+const asked: Partial<OfficeSpec> = {}
+for (const field of OFFICE_SPEC_FIELDS) {
+  const given = flag(field.key)
+  if (given === undefined) continue
+  const count = Number(given)
+  if (!Number.isFinite(count)) {
+    console.error(`--${field.key} must be a number`)
+    process.exit(1)
+  }
+  asked[field.key] = count
+}
+
+const office = generateOffice({
+  seed,
+  spec: Object.keys(asked).length > 0 ? clampOfficeSpec(asked) : undefined,
+})
 const summary = describe(office)
 
 console.log(`seed ${seed} - ${summary.size} tiles`)
