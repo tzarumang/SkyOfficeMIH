@@ -16,7 +16,7 @@ require('../index')
 
 import { Client } from 'colyseus.js'
 import { Message } from '../../types/Messages'
-import { classicOfficeMap } from '../rooms/MapObjects'
+import { classicOfficeMap, REFERENCE_MAP_PATH } from '../rooms/MapObjects'
 import { officeDrawingFor } from '../rooms/OfficeMaps'
 import { contentsOf, generateOffice } from '../office'
 import { OfficeSpec, parseOfficeId } from '../../types/Office'
@@ -24,6 +24,7 @@ import { CLASSIC_SPAWN, readSpawn } from '../../types/Spawn'
 import { ItemType } from '../../types/Items'
 import RateLimiter from '../rooms/RateLimiter'
 import http from 'http'
+import { readFileSync } from 'fs'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -45,6 +46,22 @@ async function walkTo(room: any, target: { x: number; y: number }) {
   return false
 }
 const endpoint = `ws://localhost:${process.env.PORT}`
+
+/** every layer the client walks without checking it exists first */
+const CLIENT_LAYERS = [
+  'Ground',
+  'Wall',
+  'Chair',
+  'Objects',
+  'ObjectsOnCollide',
+  'GenericObjects',
+  'GenericObjectsOnCollide',
+  'Computer',
+  'Whiteboard',
+  'Basement',
+  'VendingMachine',
+  'Zone',
+]
 
 let failures = 0
 function check(label: string, actual: unknown, expected: unknown) {
@@ -369,6 +386,18 @@ function spawnUnits() {
     { x: 688, y: 464 }
   )
   check('half a spawn is no spawn', readSpawn([{ name: 'spawnX', value: 688 }]), CLASSIC_SPAWN)
+
+  // The hand-drawn map is the one the client reads without a safety net: it is
+  // bundled rather than fetched, so anything missing from it is a crash inside
+  // the game scene rather than a request that fails and says so.
+  const classic = JSON.parse(readFileSync(REFERENCE_MAP_PATH, 'utf8'))
+  const present = classic.layers.map((layer: { name: string }) => layer.name)
+  check(
+    'the hand-drawn map still has every layer the client reads',
+    CLIENT_LAYERS.filter((name) => !present.includes(name)),
+    []
+  )
+  check('and records no spawn of its own, so it falls back', readSpawn(classic.properties), CLASSIC_SPAWN)
 }
 
 /**
@@ -410,20 +439,7 @@ function generatedOfficeUnits() {
 
   // the client walks these layers without checking they exist
   const layers = (first.map.layers as Array<{ name: string }>).map((layer) => layer.name)
-  const required = [
-    'Ground',
-    'Wall',
-    'Chair',
-    'Objects',
-    'ObjectsOnCollide',
-    'GenericObjects',
-    'GenericObjectsOnCollide',
-    'Computer',
-    'Whiteboard',
-    'Basement',
-    'VendingMachine',
-    'Zone',
-  ]
+  const required = CLIENT_LAYERS
   check(
     'every layer the client reads is present',
     required.filter((name) => !layers.includes(name)),
