@@ -10,6 +10,7 @@ import { RoomType } from '../types/Rooms'
 
 import { SkyOffice } from './rooms/SkyOffice'
 import { officeDrawingFor, readOfficeId } from './rooms/OfficeMaps'
+import { drawingVersion } from './office/index'
 
 const port = Number(process.env.PORT || 2567)
 const isProduction = process.env.NODE_ENV === 'production'
@@ -94,6 +95,19 @@ app.get('/health', (_req, res) => {
  * not a secret, and knowing one gets you no closer to joining the office that
  * uses it, which still needs the room id and its password.
  */
+/**
+ * Which drawing of an office this build produces.
+ *
+ * The client hangs this off the map url it asks for. An id names the office
+ * and says nothing about how it is drawn, so without this a copy of the old
+ * drawing and a copy of the new one have the same name - which is how three
+ * rounds of furniture fixes stayed invisible to the person testing them.
+ */
+app.get('/office/version', (_req, res) => {
+  res.set('Cache-Control', 'no-cache')
+  res.json({ version: drawingVersion() })
+})
+
 app.get('/office/map/:id.json', (req, res) => {
   const id = readOfficeId(req.params.id)
   if (id === null) return res.status(400).json({ error: 'not an office id' })

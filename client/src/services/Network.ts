@@ -81,8 +81,7 @@ export default class Network {
 
   // method to create a custom room
   async createCustom(roomData: IRoomData) {
-    const { name, description, password, unlisted, slug, lifetimeDays, layout, office } =
-      roomData
+    const { name, description, password, unlisted, slug, lifetimeDays, layout, office } = roomData
     this.room = await this.client.create(RoomType.CUSTOM, {
       name,
       description,
@@ -105,8 +104,34 @@ export default class Network {
   }
 
   /** where the server draws a generated office, given its id */
-  officeMapUrl(id: string) {
-    return `${this.endpoint.replace(/^ws/, 'http')}/office/map/${id}.json`
+  officeMapUrl(id: string, version: string) {
+    const base = `${this.endpoint.replace(/^ws/, 'http')}/office/map/${id}.json`
+    return version ? `${base}?v=${encodeURIComponent(version)}` : base
+  }
+
+  /**
+   * Which drawing of an office this server produces, asked for once.
+   *
+   * An office id names the office and says nothing about how it is drawn, so
+   * on its own it cannot tell a cached copy of last week's furniture from
+   * this morning's. Hanging the server's own fingerprint off the url gives
+   * the two copies different names, and the stale one is simply never asked
+   * for again.
+   *
+   * An office still draws without it, so a server too old to answer is not
+   * a reason to refuse to start.
+   */
+  private version: Promise<string> | null = null
+
+  drawingVersion(): Promise<string> {
+    if (!this.version) {
+      const url = `${this.endpoint.replace(/^ws/, 'http')}/office/version`
+      this.version = fetch(url)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((body) => String(body?.version ?? ''))
+        .catch(() => '')
+    }
+    return this.version
   }
 
   /**

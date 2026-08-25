@@ -19,6 +19,7 @@ try {
 
 require('../index')
 
+import { drawingVersion } from '../office/index'
 import { Client } from 'colyseus.js'
 import { Message } from '../../types/Messages'
 import { classicOfficeMap, REFERENCE_MAP_PATH } from '../rooms/MapObjects'
@@ -814,6 +815,16 @@ async function generatedRoomTests() {
   check(
     'a floor plan may be cached but never without checking',
     !/immutable/.test(caching) && /no-cache|max-age=0|must-revalidate/.test(caching),
+    true
+  )
+
+  // and the drawing has a name of its own, so a copy of one drawing of an
+  // office and a copy of the next cannot be mistaken for each other
+  const version = await getJson('/office/version')
+  check('the server names the drawing it produces', version.status, 200)
+  check(
+    'and that name changes when the drawing does',
+    version.body?.version === drawingVersion() && /^[0-9a-f]{8}$/.test(drawingVersion()),
     true
   )
 
