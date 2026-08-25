@@ -1,5 +1,5 @@
 import { Rng } from './rng'
-import { Layout, Room } from './layout'
+import { Layout, Room, styleKeyOf } from './layout'
 import { OfficeSpec } from '../../types/Office'
 import {
   CABINET,
@@ -13,10 +13,12 @@ import {
   POOL_TABLE,
   Prefab,
   SOFA_SEATS,
+  STYLES,
   TABLE,
   TILE,
-  WATER_COOLER,
   VENDING_GID,
+  WALL_ART,
+  WATER_COOLER,
   WHITEBOARD_GIDS,
   WINDOWS,
 } from './vocabulary'
@@ -67,6 +69,12 @@ export function furnish(rng: Rng, layout: Layout, spec: OfficeSpec): Placement[]
         break
       case 'lounge':
         out.push(...lounge(rng, room))
+        break
+      // The production floor and the corridor hold no furniture of their own,
+      // but their walls are the biggest blank surfaces in the building.
+      case 'open':
+      case 'corridor':
+        out.push(...dressWalls(rng, room, [room.ix1 + 1, room.ix1 + 1], false))
         break
       default:
         break
@@ -228,17 +236,44 @@ function lounge(rng: Rng, room: Room): Placement[] {
  * is off limits too - a water cooler pushed into a corner that happens to be
  * the way in is a water cooler nobody can get past.
  */
-function dressWalls(rng: Rng, room: Room, taken: [number, number]): Placement[] {
+function dressWalls(rng: Rng, room: Room, taken: [number, number], board = true): Placement[] {
   const out: Placement[] = []
   const rows = usableRows(room)
   const clear = doorways(room)
+
+  // whatever else goes on this wall has to work around the board
+  const spoken: Array<[number, number]> = board ? [[boardColumn(room), boardColumn(room) + 1]] : []
 
   // A window is let into the wall itself, across the rows the wall occupies.
   // It sits off to one side because the board is what goes in the middle.
   const window = rng.pick(WINDOWS)
   const windowX = room.ix0 + Math.max(1, Math.floor((room.ix1 - room.ix0) / 4) - 1)
-  if (windowX + window.width <= boardColumn(room) - 1) {
+  if (
+    windowX + window.width - 1 <= room.ix1 &&
+    (!board || windowX + window.width <= boardColumn(room) - 1)
+  ) {
     out.push(...stamp(window, windowX, room.y0))
+    spoken.push([windowX, windowX + window.width - 1])
+  }
+
+  // Pictures along the rest of it. A blank wall is what makes a room read as
+  // unfinished however much furniture is standing in front of it.
+  let hung = 0
+  for (let x = room.ix0; x <= room.ix1 && hung < 3; ) {
+    const art = rng.pick(WALL_ART)
+    const clashes =
+      x + art.width - 1 > room.ix1 ||
+      spoken.some(([from, to]) => x <= to && x + art.width - 1 >= from) ||
+      blocks(clear, x, room.y0, art.width, art.height)
+
+    if (!clashes && rng.chance(0.55)) {
+      out.push(...stamp(art, x, room.y0))
+      spoken.push([x, x + art.width - 1])
+      hung++
+      x += art.width + 1
+    } else {
+      x++
+    }
   }
 
   const piece = rng.chance(0.4) && rows.to - 2 >= rows.from ? WATER_COOLER : PLANT
@@ -327,13 +362,20 @@ function boardColumn(room: Room) {
   return room.ix0 + Math.floor((room.ix1 - room.ix0) / 2)
 }
 
-/** hung on the room's back wall, across the rows that wall occupies */
+/**
+ * Hung on the room's back wall, low enough to be inside the room.
+ *
+ * A board sitting squarely in the wall rows is in the wall the room *shares*
+ * with the room above, which puts it within arm's reach of somebody standing
+ * on the other side of it. Dropping it a row keeps it against the wall to look
+ * at and inside this room to use.
+ */
 function whiteboard(rng: Rng, room: Room): Placement {
   return {
     layer: 'Whiteboard',
     gid: rng.pick(WHITEBOARD_GIDS),
     tx: boardColumn(room),
-    ty: room.y0 + 1,
+    ty: room.y0 + STYLES[styleKeyOf(room.archetype)].wallRows.length,
     widthPx: 64,
     heightPx: 64,
   }

@@ -414,7 +414,10 @@ export class SkyOffice extends Room<OfficeState> {
     const player = this.state.players.get(client.sessionId)
     if (!player) return false
 
-    return isWithinReach(box, player.x, player.y)
+    if (!isWithinReach(box, player.x, player.y)) return false
+
+    // close enough, but not if the wall of the next room is in between
+    return this.office.hasLineOfSight(player, box)
   }
 
   async onAuth(client: Client, options: { password: string | null }, request?: IncomingMessage) {
