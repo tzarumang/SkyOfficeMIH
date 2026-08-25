@@ -1,5 +1,6 @@
 import { PeerOptions } from 'peerjs'
 import { peerHost, peerPath, peerPort, peerSecure } from '../runtimeConfig'
+import { parsePeerHost } from '../../../types/PeerHost'
 
 /**
  * With no options PeerJS uses its free public broker, which means signalling
@@ -11,17 +12,26 @@ import { peerHost, peerPath, peerPort, peerSecure } from '../runtimeConfig'
  * behaviour is unchanged.
  */
 export function peerOptions(): PeerOptions | undefined {
-  const host = peerHost()
+  const configured = peerHost()
 
-  if (!host) return undefined
+  if (!configured) return undefined
 
-  const port = Number(peerPort())
-  const secure = peerSecure() !== 'false'
+  // PeerJS takes a hostname and builds the url around it, so a url given here
+  // has to be read apart first rather than passed through.
+  const parsed = parsePeerHost(configured)
+  if (!parsed.host) return undefined
+
+  // What was set explicitly wins; what the url carried stands in for the rest.
+  const configuredPort = Number(peerPort())
+  const port = Number.isFinite(configuredPort) && configuredPort > 0 ? configuredPort : parsed.port
+
+  const configuredSecure = peerSecure()
+  const secure = configuredSecure ? configuredSecure !== 'false' : (parsed.secure ?? true)
 
   return {
-    host,
+    host: parsed.host,
     path: peerPath() || '/',
     secure,
-    ...(Number.isFinite(port) && port > 0 ? { port } : {}),
+    ...(port ? { port } : {}),
   }
 }
