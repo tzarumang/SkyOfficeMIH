@@ -11,6 +11,8 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 
 import { CustomRoomTable } from './CustomRoomTable'
+import { InviteJoin } from './InviteJoin'
+import { roomIdFromUrl, forgetShareLink } from '../shareLink'
 import { CreateRoomForm } from './CreateRoomForm'
 import { JoinByIdForm } from './JoinByIdForm'
 import { useAppSelector } from '../hooks'
@@ -103,6 +105,8 @@ const ProgressBar = styled(LinearProgress)`
 `
 
 export default function RoomSelectionDialog() {
+  // captured once, so dismissing the invite does not immediately re-trigger it
+  const [invitedTo, setInvitedTo] = useState(roomIdFromUrl)
   const [showCustomRoom, setShowCustomRoom] = useState(false)
   const [showCreateRoomForm, setShowCreateRoomForm] = useState(false)
   const [showSnackbar, setShowSnackbar] = useState(false)
@@ -141,7 +145,15 @@ export default function RoomSelectionDialog() {
       </Snackbar>
       <Backdrop>
         <Wrapper>
-          {showCreateRoomForm ? (
+          {invitedTo ? (
+            <InviteJoin
+              roomId={invitedTo}
+              onGiveUp={() => {
+                forgetShareLink()
+                setInvitedTo(null)
+              }}
+            />
+          ) : showCreateRoomForm ? (
             <CustomRoomWrapper>
               <TitleWrapper>
                 <IconButton className="back-button" onClick={() => setShowCreateRoomForm(false)}>

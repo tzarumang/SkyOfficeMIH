@@ -20,6 +20,7 @@ import { BackgroundMode } from '../../../types/BackgroundMode'
 import { setShowJoystick, toggleBackgroundMode } from '../stores/UserStore'
 import { useAppSelector, useAppDispatch } from '../hooks'
 import { getAvatarString, getColorByString } from '../util'
+import { ShareLinkPanel } from './ShareLinkPanel'
 
 const Backdrop = styled.div`
   position: fixed;
@@ -143,9 +144,11 @@ export default function HelperButtonGroup() {
             <RoomDescription>
               <ArrowRightIcon /> Description: {roomDescription}
             </RoomDescription>
+            <ShareLinkPanel roomId={roomId} />
             <p className="tip">
               <LightbulbIcon />
-              Shareable link coming up 😄
+              Anyone with this link joins straight away - they will still need the
+              password if the office has one.
             </p>
           </Wrapper>
         )}
