@@ -336,6 +336,15 @@ function fillRoom(rng: Rng, room: Room, placed: Placement[], limit: number): Pla
   const taken = occupied(placed)
   for (const cell of doorways(room)) taken.add(cell)
 
+  // The whiteboard hangs on the wall, so nothing already placed occupies the
+  // floor in front of it - but that floor is where you have to stand to use it,
+  // and a cabinet pushed under a board is a board nobody can reach.
+  const board = placed.find((piece) => piece.layer === 'Whiteboard')
+  if (board) {
+    const wide = Math.max(1, Math.round(board.widthPx / TILE))
+    for (let dx = 0; dx < wide; dx++) taken.add(`${board.tx + dx},${board.ty + 1}`)
+  }
+
   const free = (piece: Prefab, x: number, y: number) => {
     if (x < cols.from || x + piece.width - 1 > cols.to) return false
     if (y < rows.from || y + piece.height - 1 > rows.to) return false

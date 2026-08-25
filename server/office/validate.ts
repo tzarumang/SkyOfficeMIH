@@ -157,6 +157,38 @@ export function validate(
     )
   }
 
+  // --- and neither is the floor in front of a whiteboard --------------------
+  //
+  // A board hangs on the wall, so nothing is ever placed *on* it and the
+  // reachability check above is satisfied by the wall row it overlaps. What
+  // matters is the row below it, which is the only place you can stand to use
+  // it. A cabinet pushed under a board is a board nobody can open.
+  const blockedBoards: string[] = []
+  const solidCells = new Set<string>()
+  for (const placement of placements) {
+    if (!SOLID_LAYERS.has(placement.layer)) continue
+    for (const [x, y] of occupiedTiles(placement)) solidCells.add(`${x},${y}`)
+  }
+  for (const placement of placements) {
+    if (placement.layer !== 'Whiteboard') continue
+    const columns = Math.max(1, Math.round(placement.widthPx / TILE))
+    const front = []
+    for (let dx = 0; dx < columns; dx++) {
+      const x = placement.tx + dx
+      const y = placement.ty + 1
+      if (isFloor(layout, x, y) && !solidCells.has(`${x},${y}`)) front.push(x)
+    }
+    if (front.length === 0) blockedBoards.push(`${placement.tx},${placement.ty}`)
+  }
+  if (blockedBoards.length > 0) {
+    fail(
+      'a whiteboard can be stood in front of',
+      `${blockedBoards.length} board(s) have nowhere to stand: ${blockedBoards
+        .slice(0, 3)
+        .join(', ')}`
+    )
+  }
+
   // --- zones do not overlap, or "which room am I in" has no answer ----------
   const rooms = layout.rooms
   for (let i = 0; i < rooms.length; i++) {
