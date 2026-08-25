@@ -19,6 +19,7 @@ try {
 
 require('../index')
 
+import { parsePeerHost } from '../../types/PeerHost'
 import { drawingVersion } from '../office/index'
 import { Client } from 'colyseus.js'
 import { Message } from '../../types/Messages'
@@ -483,6 +484,29 @@ const HALL_SEAT_GIDS = new Set([2573, 2574])
 /** the desk halves of a bench, so a test can tell a desk from a partition */
 const DESK_GIDS = new Set([3039, 3040, 3041, 3055, 3056, 3057, 2585, 2586, 2587, 2590, 2591, 2592])
 
+function peerHostUnits() {
+  console.log('\nWhere the signalling server is')
+
+  // The live stack had PEER_HOST set to a url, which PeerJS concatenated into
+  // wss://https//peer.example.com:443/peerjs - a socket that cannot connect and
+  // a console message that points nowhere. A url is the obvious thing to paste
+  // into a setting whose value is a server, so it has to be read, not rejected.
+  const cases: Array<[string, ReturnType<typeof parsePeerHost>]> = [
+    ['peer.example.com', { host: 'peer.example.com' }],
+    ['https://peer.example.com', { host: 'peer.example.com', secure: true }],
+    ['http://peer.example.com', { host: 'peer.example.com', secure: false }],
+    ['wss://peer.example.com/', { host: 'peer.example.com', secure: true }],
+    ['https://peer.example.com:9000', { host: 'peer.example.com', secure: true, port: 9000 }],
+    ['peer.example.com:9000', { host: 'peer.example.com', port: 9000 }],
+    ['peer.example.com/peerjs', { host: 'peer.example.com' }],
+    ['  ', { host: '' }],
+  ]
+
+  for (const [given, expected] of cases) {
+    check(`'${given.trim() || '(blank)'}' reads as a host`, parsePeerHost(given), expected)
+  }
+}
+
 function generatedOfficeUnits() {
   console.log('\nGenerated offices')
 
@@ -877,6 +901,7 @@ async function generatedRoomTests() {
 async function main() {
   rateLimiterUnits()
   spawnUnits()
+  peerHostUnits()
   generatedOfficeUnits()
   await sleep(700)
   await matchmakingOriginTests()

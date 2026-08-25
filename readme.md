@@ -116,7 +116,7 @@ reachable from wherever people open the app. Container names will not work.
 | Variable | Purpose |
 | --- | --- |
 | `SERVER_URL` | `ws://` or `wss://` URL of the `server` service. Leave empty and the client looks for a server on its own hostname at port 2567. |
-| `PEER_HOST` | Hostname of the `peerjs` service. Leave empty and the client falls back to the free public PeerJS broker, which puts call metadata on a third party. |
+| `PEER_HOST` | Hostname of the `peerjs` service - `peer.example.com`, not `https://peer.example.com`. A URL is read apart rather than rejected, and its scheme and port stand in for `PEER_SECURE` and `PEER_PORT`. Leave empty and the client falls back to the free public PeerJS broker, which puts call metadata on a third party. |
 | `PEER_PORT` / `PEER_PATH` / `PEER_SECURE` | Details for the above. Set `PEER_SECURE=false` when reaching it over plain http. |
 | `ALLOWED_ORIGINS` | Comma-separated origins allowed to reach the matchmaking API, e.g. `https://office.example.com`. Unset means any origin is accepted. |
 | `COLYSEUS_MONITOR_USER` / `COLYSEUS_MONITOR_PASSWORD` | Credentials for the `/colyseus` dashboard, which reads every room's state and can disconnect clients. **It is not mounted at all unless both are set.** |
