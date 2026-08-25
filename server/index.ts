@@ -30,7 +30,7 @@ process.on('unhandledRejection', (reason) => {
 /**
  * Colyseus 0.14 does matchmaking over HTTP, so the client origin has to be
  * allowed here. Set ALLOWED_ORIGINS to a comma-separated list of the origins
- * that serve the client, e.g. "https://skyoffice.netlify.app".
+ * that serve the client, e.g. "https://office.example.com".
  */
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
