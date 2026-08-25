@@ -17,6 +17,7 @@ import { IPlayer } from '../../../types/IOfficeState'
 import { PlayerBehavior } from '../../../types/PlayerBehavior'
 import { ITEM_SPECS, ITEM_TYPES, ItemType } from '../../../types/Items'
 import { DECOR_LAYERS, DecorLayerSpec, GROUND_LAYER } from '../../../types/MapLayers'
+import { readSpawn } from '../../../types/Spawn'
 import { textureFromAnim } from '../util'
 import { ensureAvatarTexture } from '../avatars/spriteFactory'
 import { isAvatar } from '../../../types/Avatar'
@@ -162,18 +163,12 @@ export default class Game extends Phaser.Scene {
   }
 
   /**
-   * Where this office puts a player. A generated building is whatever size
-   * its contents need, so it carries its own spawn; the hand-drawn one has
-   * always used the same spot.
+   * Where this office puts a player. A generated building is whatever size its
+   * contents need, so it carries its own spawn; the hand-drawn one has none at
+   * all, and Phaser hands that back as an empty object rather than a list.
    */
   private spawnPoint() {
-    const properties = this.map.properties as Array<{ name: string; value: number }>
-    const read = (name: string) =>
-      Number(properties?.find((property) => property.name === name)?.value)
-
-    const x = read('spawnX')
-    const y = read('spawnY')
-    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : { x: 705, y: 500 }
+    return readSpawn(this.map.properties)
   }
 
   private handleItemSelectorOverlap(playerSelector, selectionItem) {
