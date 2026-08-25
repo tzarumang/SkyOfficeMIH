@@ -40,6 +40,18 @@ export default class RateLimiter {
     return true
   }
 
+  /**
+   * Spends up to `amount` and reports how much was actually available. Used
+   * for the movement budget, where a step that cannot be afforded in full is
+   * trimmed rather than dropped.
+   */
+  takeUpTo(key: string, amount: number, now = Date.now()) {
+    const bucket = this.refill(key, now)
+    const spent = Math.max(0, Math.min(amount, bucket.tokens))
+    bucket.tokens -= spent
+    return spent
+  }
+
   forget(key: string) {
     this.buckets.delete(key)
   }

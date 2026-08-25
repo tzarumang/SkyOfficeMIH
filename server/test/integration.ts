@@ -15,6 +15,24 @@ import { computerBoxes } from '../rooms/MapObjects'
 import RateLimiter from '../rooms/RateLimiter'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const positionOf = (room: any) => room.state.players.get(room.sessionId)
+const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+  Math.hypot(a.x - b.x, a.y - b.y)
+
+/**
+ * The server only lets a player cover ground at a plausible speed, so arriving
+ * somewhere takes real time. Asking repeatedly to be at the destination walks
+ * them there a budget at a time.
+ */
+async function walkTo(room: any, target: { x: number; y: number }) {
+  for (let step = 0; step < 40; step++) {
+    room.send(Message.UPDATE_PLAYER, { x: target.x, y: target.y, anim: 'adam_idle_down' })
+    await sleep(100)
+    if (distance(positionOf(room), target) < 1) return true
+  }
+  return false
+}
 const endpoint = `ws://localhost:${process.env.PORT}`
 
 let failures = 0
@@ -37,6 +55,11 @@ function rateLimiterUnits() {
   check('allowance comes back over time', limiter.consume('a', 3000), true)
   check('keys are independent', limiter.consume('b', 1000), true)
   check('check() does not spend allowance', [limiter.check('c', 0), limiter.consume('c', 0)], [true, true])
+
+  const budget = new RateLimiter(150, 600)
+  check('takeUpTo spends what it can', budget.takeUpTo('m', 400, 0), 150)
+  check('and leaves nothing behind', budget.takeUpTo('m', 10, 0), 0)
+  check('it refills at its own rate', budget.takeUpTo('m', 400, 100), 60)
 }
 
 async function roomTests() {
@@ -66,22 +89,49 @@ async function roomTests() {
   const far = computerBoxes[3]
   const connectedTo = (id: string) => (room.state as any).computers.get(id)?.connectedUser.size
 
-  room.send(Message.UPDATE_PLAYER, { x: far.x, y: far.y, anim: 'adam_idle_down' })
-  await sleep(250)
+  // the spawn point is nowhere near a computer
   room.send(Message.CONNECT_TO_COMPUTER, { computerId: '0' })
   await sleep(350)
   check('a computer across the room is refused', connectedTo('0'), 0)
 
-  room.send(Message.UPDATE_PLAYER, { x: near.x, y: near.y, anim: 'adam_idle_down' })
-  await sleep(250)
+  check('walking to a computer arrives', await walkTo(room, near), true)
   room.send(Message.CONNECT_TO_COMPUTER, { computerId: '0' })
   await sleep(350)
   check('the computer being stood at is allowed', connectedTo('0'), 1)
 
+  console.log('\nMovement')
+  // The real client sends a position every frame it moves, ~3px at a time. That
+  // must never be trimmed, or the budget would make ordinary walking stutter.
+  const walkFrom = { x: positionOf(room).x, y: positionOf(room).y }
+  let asked = walkFrom.x
+  for (let frame = 0; frame < 60; frame++) {
+    asked = Math.max(0, asked - 200 / 60)
+    room.send(Message.UPDATE_PLAYER, { x: asked, y: walkFrom.y, anim: 'adam_run_left' })
+    await sleep(16)
+  }
+  await sleep(200)
+  const covered = walkFrom.x - positionOf(room).x
+  check('ordinary frame-by-frame walking is never trimmed', covered >= (walkFrom.x - asked) * 0.95, true)
+
+  // one jump straight at a computer on the other side of the room.
+  // positionOf returns the live schema object, so these have to be snapshots.
+  const jumpFrom = { x: positionOf(room).x, y: positionOf(room).y }
+  room.send(Message.UPDATE_PLAYER, { x: far.x, y: far.y, anim: 'adam_idle_down' })
+  await sleep(300)
+  const jumpTo = { x: positionOf(room).x, y: positionOf(room).y }
+
+  check('a teleport does not arrive', distance(jumpTo, far) > 1, true)
+  check('a teleport is trimmed to the movement budget', distance(jumpTo, jumpFrom) <= 200, true)
+
+  room.send(Message.CONNECT_TO_COMPUTER, { computerId: '3' })
+  await sleep(350)
+  check('so it does not get you into that computer either', connectedTo('3'), 0)
+
   console.log('\nInput limits')
+  const heldAt = { x: positionOf(room).x, y: positionOf(room).y }
   room.send(Message.UPDATE_PLAYER, { x: 999999, y: 999999, anim: 'adam_idle_down' })
   await sleep(250)
-  check('a position outside the map is dropped', (room.state as any).players.get(room.sessionId).x, near.x)
+  check('a position outside the map is dropped', positionOf(room).x, heldAt.x)
 
   room.send(Message.UPDATE_PLAYER_NAME, { name: 'x'.repeat(5000) })
   await sleep(300)

@@ -28,6 +28,16 @@ const MAX_ROOM_DESCRIPTION_LENGTH = 2000
 /** the client sends a position on every frame it moves, so ~60/s is normal */
 const MOVEMENT_PER_SECOND = 120
 const MOVEMENT_BURST = 240
+
+/**
+ * How much ground a player is allowed to cover. The client walks at 200 px/s,
+ * so the budget refills at three times that to leave room for latency and for
+ * updates arriving in bursts. The capacity is what can be spent at once: large
+ * enough for the one legitimate jump in the game - sitting snaps the player
+ * onto the chair - and far short of the distance between two items.
+ */
+const MOVEMENT_REFILL_PX_PER_SECOND = 600
+const MOVEMENT_BUDGET_PX = 150
 const CHAT_PER_SECOND = 0.5
 const CHAT_BURST = 5
 /** five quick tries at a room password, then one a minute */
@@ -47,6 +57,7 @@ export class SkyOffice extends Room<OfficeState> {
   private description: string
   private password: string | null = null
   private movementLimiter = new RateLimiter(MOVEMENT_BURST, MOVEMENT_PER_SECOND)
+  private movementBudget = new RateLimiter(MOVEMENT_BUDGET_PX, MOVEMENT_REFILL_PX_PER_SECOND)
   private chatLimiter = new RateLimiter(CHAT_BURST, CHAT_PER_SECOND)
   private passwordLimiter = new RateLimiter(PASSWORD_ATTEMPT_BURST, PASSWORD_ATTEMPTS_PER_SECOND)
 
@@ -155,7 +166,15 @@ export class SkyOffice extends Room<OfficeState> {
         if (typeof message.anim !== 'string' || message.anim.length > MAX_ANIM_LENGTH) return
         if (!this.movementLimiter.consume(client.sessionId)) return
 
-        this.dispatcher.dispatch(new PlayerUpdateCommand(), { client, x, y, anim: message.anim })
+        const step = this.affordableStep(client.sessionId, x, y)
+        if (!step) return
+
+        this.dispatcher.dispatch(new PlayerUpdateCommand(), {
+          client,
+          x: step.x,
+          y: step.y,
+          anim: message.anim,
+        })
       }
     )
 
@@ -239,6 +258,34 @@ export class SkyOffice extends Room<OfficeState> {
     return value
   }
 
+  /**
+   * Checking the map bounds alone let a client claim any position on it, so it
+   * could teleport next to a computer and then pass the proximity check
+   * honestly. A player may now only cover ground they could plausibly have
+   * walked.
+   *
+   * A step that costs more than the budget is trimmed towards where the client
+   * asked to be, rather than dropped. Dropping would be simpler, but a player
+   * whose real position had run ahead of the server would then never be able to
+   * move again - and this has to hold for movement the server has never seen,
+   * so it degrades to lagging behind instead of wedging.
+   */
+  private affordableStep(sessionId: string, x: number, y: number) {
+    const player = this.state.players.get(sessionId)
+    if (!player) return null
+
+    const dx = x - player.x
+    const dy = y - player.y
+    const distance = Math.hypot(dx, dy)
+    if (distance === 0) return { x, y }
+
+    const affordable = this.movementBudget.takeUpTo(sessionId, distance)
+    if (affordable >= distance) return { x, y }
+
+    const ratio = affordable / distance
+    return { x: player.x + dx * ratio, y: player.y + dy * ratio }
+  }
+
   private readCoordinate(value: unknown, limit: number) {
     if (typeof value !== 'number' || !Number.isFinite(value)) return null
     if (value < 0 || value > limit) return null
@@ -295,6 +342,7 @@ export class SkyOffice extends Room<OfficeState> {
 
   onLeave(client: Client, consented: boolean) {
     this.movementLimiter.forget(client.sessionId)
+    this.movementBudget.forget(client.sessionId)
     this.chatLimiter.forget(client.sessionId)
 
     if (this.state.players.has(client.sessionId)) {
