@@ -199,6 +199,10 @@ export default class Game extends Phaser.Scene {
     const obj = group
       .get(actualX, actualY, key, object.gid! - this.map.getTileset(tilesetName).firstgid)
       .setDepth(actualY)
+
+    // Furniture that only exists one way round is placed mirrored: Tiled packs
+    // that into the top bits of the gid and Phaser hands it back here.
+    if (object.flippedHorizontal) obj.setFlipX(true)
     return obj
   }
 

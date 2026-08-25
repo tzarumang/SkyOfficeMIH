@@ -90,15 +90,23 @@ export default class Bootstrap extends Phaser.Scene {
     store.dispatch(setRoomJoined(true))
   }
 
-  /** the tilemap cache key for this office, fetching it if it is new */
-  private loadOfficeMap(id: string): Promise<string> {
-    if (!id) return Promise.resolve('tilemap')
+  /**
+   * The tilemap cache key for this office, fetching it if it is new.
+   *
+   * Keyed by the drawing as well as the office, because Phaser's cache is
+   * the third place a stale copy can hide - after the browser's and the
+   * server's - and an office id alone cannot tell one drawing of an office
+   * from another.
+   */
+  private async loadOfficeMap(id: string): Promise<string> {
+    if (!id) return 'tilemap'
 
-    const key = `tilemap-${id}`
-    if (this.cache.tilemap.has(key)) return Promise.resolve(key)
+    const version = await this.network.drawingVersion()
+    const key = version ? `tilemap-${id}-${version}` : `tilemap-${id}`
+    if (this.cache.tilemap.has(key)) return key
 
     return new Promise((resolve, reject) => {
-      this.load.tilemapTiledJSON(key, this.network.officeMapUrl(id))
+      this.load.tilemapTiledJSON(key, this.network.officeMapUrl(id, version))
       this.load.once('complete', () => {
         // Falling back to the office that ships with the client would draw a
         // building the server is not running, so this has to fail instead.

@@ -66,27 +66,82 @@ export type ChairDirection = keyof typeof CHAIRS
  */
 export const DESK_CHAIRS: Partial<Record<ChairDirection, number>> = { down: 2568, up: 2572 }
 
+/**
+ * The tub chairs the corridor of the hand-drawn map is lined with, map row 12
+ * at columns 7-9 and 15-18. Two of them, in runs, so a long wall of seating is
+ * not one chair repeated.
+ */
+export const HALL_CHAIRS = [2573, 2574]
+
+/** and the private office uses a third: the same chair seen from the side */
+export const OFFICE_CHAIR = 2569
+
 /** five screens, so a bank of desks is not obviously repeating */
 export const COMPUTER_GIDS = [4680, 4681, 4682, 4683, 4684]
 export const WHITEBOARD_GIDS = [4685, 4686, 4687]
 export const VENDING_GID = 5488
 
 /**
- * The unit the production floor is built out of, and the thing I had wrong
- * for a long time: on the hand-drawn map a desk bank is not one desk with a
- * chair, it is *two* desks sharing one three-by-two footprint - one worked at
- * from above, one from below, backs against each other. Map columns 30-32,
- * rows 15-16, where two sprites are stamped over each other: one draws the
- * near desk, the other the far one.
+ * The unit the production floor is built out of. Zooming right into the bank
+ * on the hand-drawn map, at columns 30-38 rows 14-17, it is three pieces and
+ * not one, which is what took so long to see:
+ *
+ *   row y-1   the far desk's back edge, and the chair of whoever sits at it
+ *   row y     the glass partition, with the far desk's front behind it
+ *   row y+1   the near desk
+ *   row y+2   the chair of whoever sits at the near desk
+ *
+ * So a bench seats two people back to back, but they do not share one desk
+ * sprite - each has their own, and the partition is what stands between them.
+ * Drawing a bench for a seat nobody has been given is what leaves a desk with
+ * no chair at it.
  */
-export const DESK_BENCH: Prefab = prefab('ObjectsOnCollide', [
-  [3017, 3018, 3019],
-  [3033, 3034, 3035],
-])
-export const DESK_BENCH_FAR: Prefab = prefab('ObjectsOnCollide', [
+export const BENCH_NEAR_DESK: Prefab = prefab('ObjectsOnCollide', [
   [3039, 3040, 3041],
   [3055, 3056, 3057],
 ])
+
+/**
+ * The desk on the other side of the partition. Only its back edge and its
+ * front are drawn: the surface between them would be behind the partition, so
+ * the map leaves it out. Two of them, so a bank is not one desk repeated.
+ */
+export const BENCH_FAR_DESK: Prefab[] = [
+  prefab(
+    'Objects',
+    [[2585, 2586, 2587]],
+    [
+      { gid: 2617, dx: 0, dy: 1, layer: 'ObjectsOnCollide' },
+      { gid: 2618, dx: 1, dy: 1, layer: 'ObjectsOnCollide' },
+      { gid: 2619, dx: 2, dy: 1, layer: 'ObjectsOnCollide' },
+    ]
+  ),
+  prefab(
+    'Objects',
+    [[2590, 2591, 2592]],
+    [
+      { gid: 2622, dx: 0, dy: 1, layer: 'ObjectsOnCollide' },
+      { gid: 2623, dx: 1, dy: 1, layer: 'ObjectsOnCollide' },
+      { gid: 2624, dx: 2, dy: 1, layer: 'ObjectsOnCollide' },
+    ]
+  ),
+]
+
+/**
+ * The glass screen the two desks of a bench back onto. The third tile carries
+ * the post at its right-hand end, so benches placed shoulder to shoulder end
+ * up with a post between each pair without one being asked for.
+ */
+export const BENCH_PARTITION: Prefab = prefab('ObjectsOnCollide', [
+  [3017, 3018, 3019],
+  [3033, 3034, 3035],
+])
+
+/** the top of that post, which stands a row above the glass */
+export const BENCH_POST_TOP = 3003
+
+/** the post that closes the open end of a run of benches, map column 29 */
+export const BENCH_END_POST = prefab('Objects', [[3000], [3016], [3032]])
 
 /**
  * A meeting table: a left cap, a repeating middle and a right cap, over three
@@ -159,6 +214,20 @@ export const WINDOWS = [
   ]),
 ]
 
+/**
+ * The tall plant that stands between the runs of chairs in that corridor, map
+ * column 6 rows 10-12. Its pot is the only part of it you bump into.
+ */
+export const HALL_PLANT: Prefab = {
+  width: 1,
+  height: 3,
+  parts: [
+    { gid: 2782, dx: 0, dy: 0, layer: 'Objects' },
+    { gid: 2798, dx: 0, dy: 1, layer: 'Objects' },
+    { gid: 2814, dx: 0, dy: 2, layer: 'ObjectsOnCollide' },
+  ],
+}
+
 /** a potted plant, map column 32 rows 1-2 of the private office */
 export const PLANT = prefab('Objects', [[2702], [2718]])
 
@@ -224,28 +293,13 @@ export const WALL_ART: Prefab[] = [
 ]
 
 /**
- * What is actually on a desk. The production floor of the hand-drawn map
- * layers these over the desk itself, which is most of why its desks read as
- * somebody's rather than as furniture - map rows 15-16 and 23-24.
+ * What is left lying on a desk that has no screen on it: a lamp, a laptop.
+ * Single tiles, dropped on the surface - the hand-drawn floor puts a lamp on
+ * one desk and papers on another, and that is most of why its desks read as
+ * somebody's rather than as furniture. Map row 15 column 36, and row 16
+ * column 38.
  */
-/**
- * What is left lying on a desk - map columns 33-35 and 36-38, rows 14-15.
- * Two rows, because the things at the back of a desk stand a row higher than
- * the things at the front of it.
- */
-export const DESK_CLUTTER: Prefab[] = [
-  prefab('Objects', [
-    [2585, 2586, 2587],
-    [2617, 2618, 2619],
-  ]),
-  prefab('Objects', [
-    [2590, 2591, 2592],
-    [2622, 2623, 2624],
-  ]),
-]
-
-/** the partition between one desk and the next, map column 29 rows 14-16 */
-export const CUBICLE_DIVIDER = prefab('Objects', [[3000], [3016], [3032]])
+export const DESK_CLUTTER = [2835, 2837, 2839, 2869, 2871]
 
 /** the printer everybody walks to, map columns 25-26 rows 26-28 */
 export const PRINTER: Prefab = {

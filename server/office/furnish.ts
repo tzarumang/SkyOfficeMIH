@@ -10,11 +10,16 @@ import {
   COMPUTER_GIDS,
   CORNER_DESK,
   COUCH,
-  CUBICLE_DIVIDER,
-  DESK_BENCH,
-  DESK_BENCH_FAR,
+  BENCH_END_POST,
+  BENCH_FAR_DESK,
+  BENCH_NEAR_DESK,
+  BENCH_PARTITION,
+  BENCH_POST_TOP,
   DESK_CHAIRS,
   DESK_CLUTTER,
+  HALL_CHAIRS,
+  HALL_PLANT,
+  OFFICE_CHAIR,
   PLANT,
   POOL_TABLE,
   Prefab,
@@ -49,6 +54,8 @@ export interface Placement {
   widthPx: number
   heightPx: number
   direction?: ChairDirection
+  /** drawn mirrored left to right, for furniture that only exists one way round */
+  flipX?: boolean
 }
 
 export function furnish(rng: Rng, layout: Layout, spec: OfficeSpec): Placement[] {
@@ -57,8 +64,19 @@ export function furnish(rng: Rng, layout: Layout, spec: OfficeSpec): Placement[]
   // --- the production floor -------------------------------------------------
   // Which desks get a screen is decided across the whole floor rather than desk
   // by desk, so the office ends up with exactly the number that was asked for.
+  // Only the near desks are in the running: a screen is two rows tall and the
+  // far desk has one row showing above the partition, so a screen there is
+  // drawn over the head of whoever is sitting at it. The floor is built with a
+  // bench per screen for that reason, so there are always enough.
   const withComputer = new Set(
-    rng.shuffle(layout.deskSlots.map((_, index) => index)).slice(0, spec.computerDesks)
+    rng
+      .shuffle(
+        layout.deskSlots
+          .map((slot, index) => ({ slot, index }))
+          .filter(({ slot }) => slot.facing === 'up')
+          .map(({ index }) => index)
+      )
+      .slice(0, spec.computerDesks)
   )
 
   // Two desks share a bench, so the bench itself is stamped once and each
@@ -70,9 +88,11 @@ export function furnish(rng: Rng, layout: Layout, spec: OfficeSpec): Placement[]
     seats.push({ facing: slot.facing, computer: withComputer.has(index) })
     benches.set(key, seats)
   })
+  // Only the bench at the open end of a run needs a post of its own; every
+  // other one is closed off by its neighbour's.
   for (const [key, seats] of benches) {
     const [x, y] = key.split(',').map(Number)
-    out.push(...deskBench(rng, x, y, seats))
+    out.push(...deskBench(rng, x, y, seats, !benches.has(`${x - BENCH_PARTITION.width},${y}`)))
   }
 
   const floor = layout.rooms.find((room) => room.archetype === 'open')
@@ -90,11 +110,13 @@ export function furnish(rng: Rng, layout: Layout, spec: OfficeSpec): Placement[]
       case 'lounge':
         out.push(...lounge(rng, room))
         break
-      // The production floor and the corridor hold no furniture of their own,
-      // but their walls are the biggest blank surfaces in the building.
-      case 'open':
       case 'corridor':
-        out.push(...dressWalls(rng, room, [room.ix1 + 1, room.ix1 + 1], false))
+        out.push(...hallway(rng, room))
+        break
+      // The production floor holds no furniture of its own, but its walls are
+      // the biggest blank surfaces in the building.
+      case 'open':
+        out.push(...dressWalls(rng, room, [room.ix1 + 1, room.ix1 + 1], { board: false }))
         break
       default:
         break
@@ -189,26 +211,53 @@ function oneOnOneRoom(rng: Rng, room: Room): Placement[] {
   const bottom = rows.to
 
   /**
-   * The desk goes against the wall furthest from the way in.
+   * The desk stands at the end of the room furthest from the door, turned so
+   * that whoever sits at it is looking back towards it.
    *
-   * A room is entered through one of its side walls, and putting the desk on
-   * that same wall means walking straight into the back of it - the door ends
-   * up behind whoever is sitting there. Everything else then fills the half
-   * nearer the door, which is where a visitor would stop anyway.
+   * Nobody puts a desk facing a wall. You sit behind it looking at the way in,
+   * because the whole point of the room is the person who is about to walk
+   * through it. The sprite only exists one way round - its alcove is cut into
+   * the right side, so its occupant sits on the right and looks left - which
+   * is fine for a room entered from the left and exactly backwards for one
+   * entered from the right. So the room entered from the right gets a mirrored
+   * desk at its left-hand end, and the occupant looks right, at the door.
    */
+  const cols = usableColumns(room)
+  const clear = doorways(room)
   const doorOnRight = room.doors.some((door) => door.x === room.x1)
-  const deskX = doorOnRight ? room.ix0 + 1 : room.ix1 - CORNER_DESK.width
-  const deskTop = Math.max(rows.from, bottom - CORNER_DESK.height + 1)
-  out.push(...stamp(CORNER_DESK, deskX, deskTop))
-  out.push(chair('left', deskX + 1, Math.min(bottom, deskTop + 2)))
+  const deskX = doorOnRight ? cols.from : cols.to - CORNER_DESK.width + 1
 
-  // a sofa along the wall the desk did not take, three seats side by side
-  const sofaFrom = doorOnRight ? room.ix1 - SOFA_SEATS.length : room.ix0 + 1
+  // Bottom of the room by preference, sliding up until it is clear of the way
+  // in - the doorway is on the same side of the room as one end of the desk.
+  const stops: number[] = []
+  for (let top = bottom - CORNER_DESK.height + 1; top >= rows.from; top--) stops.push(top)
+  const deskTop =
+    stops.find((top) => !blocks(clear, deskX, top, CORNER_DESK.width, CORNER_DESK.height)) ??
+    Math.max(rows.from, stops[0])
+
+  out.push(...stamp(CORNER_DESK, deskX, deskTop, doorOnRight))
+
+  // the seat is in the desk's alcove, which the mirroring moves to its far side
+  const seatX = doorOnRight ? deskX : deskX + 1
+  out.push({
+    ...chair(doorOnRight ? 'right' : 'left', seatX, Math.min(bottom, deskTop + 2)),
+    gid: OFFICE_CHAIR,
+    flipX: doorOnRight,
+  })
+
+  // The sofa faces the desk from the other end of the room, which is where a
+  // visitor coming through the door ends up.
+  const visitorFrom = doorOnRight ? cols.to - SOFA_SEATS.length + 1 : cols.from
   const clearOfDesk = (x: number) => (doorOnRight ? x > deskX + CORNER_DESK.width : x < deskX - 1)
 
   SOFA_SEATS.forEach((gid, index) => {
-    const x = sofaFrom + index
-    if (x >= room.ix0 && x <= room.ix1 && clearOfDesk(x)) {
+    const x = visitorFrom + index
+    if (
+      x >= room.ix0 &&
+      x <= room.ix1 &&
+      clearOfDesk(x) &&
+      !blocks(clear, x, rows.from + 1, 1, 1)
+    ) {
       out.push({
         layer: 'Chair',
         gid,
@@ -221,26 +270,105 @@ function oneOnOneRoom(rng: Rng, room: Room): Placement[] {
     }
   })
 
-  // A cabinet beside the desk rather than by the door - it is the one other
-  // solid thing in the room, and solid things belong away from the way in.
-  const clear = doorways(room)
-  const cabinetX = doorOnRight ? deskX + CORNER_DESK.width + 1 : deskX - CABINET.width - 1
-  const cabinetTop = Math.min(bottom - 1, rows.from + 2)
+  // One cabinet, at the end of the sofa. The drawn office has exactly one other
+  // solid thing in it and puts it here.
+  const inward = doorOnRight ? -1 : 1
+  const cabinetX =
+    inward > 0 ? visitorFrom + SOFA_SEATS.length : visitorFrom - 1 - CABINET.width + 1
   if (
     bottom - rows.from >= 3 &&
     cabinetX >= room.ix0 &&
     cabinetX + CABINET.width - 1 <= room.ix1 &&
-    !blocks(clear, cabinetX, cabinetTop, CABINET.width, CABINET.height)
+    clearOfDesk(cabinetX) &&
+    clearOfDesk(cabinetX + CABINET.width - 1) &&
+    !blocks(clear, cabinetX, rows.from + 1, CABINET.width, CABINET.height)
   ) {
-    out.push(...stamp(CABINET, cabinetX, cabinetTop))
+    out.push(...stamp(CABINET, cabinetX, rows.from + 1))
+  }
+
+  // And something green in the two corners at the desk end, which is what the
+  // drawn office does and the whole of what it does. This room is not filled
+  // the way the others are: a private office is meant to read as bare, and a
+  // pass that stands a bookcase against every clear stretch of wall turns it
+  // into a furniture showroom.
+  const cornerX = doorOnRight ? cols.to : cols.from
+  for (const top of [rows.from + 1, bottom - PLANT.height + 1]) {
+    if (top < rows.from || top + PLANT.height - 1 > bottom) continue
+    if (blocks(clear, cornerX, top, PLANT.width, PLANT.height)) continue
+    out.push(...stamp(PLANT, cornerX, top))
   }
 
   const used: [number, number] = doorOnRight
-    ? [deskX, deskX + CORNER_DESK.width]
-    : [deskX, room.ix1]
-  out.push(...dressWalls(rng, room, used))
+    ? [room.ix0, cabinetX + CABINET.width]
+    : [cabinetX, room.ix1]
+  out.push(...dressWalls(rng, room, used, { pictures: 1, corner: false }))
   out.push(whiteboard(rng, room))
-  out.push(...fillRoom(rng, room, out, 3))
+  return out
+}
+
+/**
+ * The corridor, lined the way the one on the hand-drawn map is: runs of tub
+ * chairs down the wall with a tall plant standing between them.
+ *
+ * A corridor is the longest wall in the building and the only room nobody
+ * has any reason to stop in, which is exactly why it looks unfinished when
+ * it is left bare. The chairs are on the Chair layer, so they are somewhere
+ * to sit and wait rather than something to walk round.
+ */
+const HALL_RUN = 3
+
+function hallway(rng: Rng, room: Room): Placement[] {
+  const out: Placement[] = []
+  const rows = usableRows(room)
+  const clear = doorways(room)
+  // Whichever wall has fewer doors in it: every room off the corridor opens
+  // through one side of it, so seating that side is seating a wall that is
+  // mostly doorway.
+  const doorsOn = (x: number) => room.doors.filter((door) => door.x === x).length
+  const wall = doorsOn(room.x0) <= doorsOn(room.x1) ? room.ix0 : room.ix1
+  const seat = rng.pick(HALL_CHAIRS)
+
+  const free = (y: number, height: number) =>
+    y + height - 1 <= rows.to && !blocks(clear, wall, y, 1, height)
+
+  let y = rows.from + 1
+  let seated = 0
+  while (y <= rows.to) {
+    if (!free(y, 1)) {
+      // past a doorway the run starts again, so the chairs do not read as one
+      // long bench somebody has cut a hole in
+      seated = 0
+      y++
+      continue
+    }
+
+    // A run of chairs, then something green to break it up. The plant stands
+    // in a pot you bump into, so it needs its whole height clear of a doorway.
+    if (seated >= HALL_RUN) {
+      if (free(y, HALL_PLANT.height)) {
+        out.push(...stamp(HALL_PLANT, wall, y))
+        y += HALL_PLANT.height
+      } else {
+        y++
+      }
+      seated = 0
+      continue
+    }
+
+    out.push({
+      layer: 'Chair',
+      gid: seat,
+      tx: wall,
+      ty: y,
+      widthPx: TILE,
+      heightPx: TILE * 2,
+      direction: 'down',
+    })
+    seated++
+    y++
+  }
+
+  out.push(...dressWalls(rng, room, [room.ix1 + 1, room.ix1 + 1], { board: false, corner: false }))
   return out
 }
 
@@ -391,7 +519,22 @@ function fillRoom(rng: Rng, room: Room, placed: Placement[], limit: number): Pla
  * is off limits too - a water cooler pushed into a corner that happens to be
  * the way in is a water cooler nobody can get past.
  */
-function dressWalls(rng: Rng, room: Room, taken: [number, number], board = true): Placement[] {
+interface WallOptions {
+  /** false in a room whose only wall fitting is a window */
+  board?: boolean
+  /** how many pictures may be hung, at most */
+  pictures?: number
+  /** whether to stand something in whichever corner is still free */
+  corner?: boolean
+}
+
+function dressWalls(
+  rng: Rng,
+  room: Room,
+  taken: [number, number],
+  options: WallOptions = {}
+): Placement[] {
+  const { board = true, pictures = 3, corner = true } = options
   const out: Placement[] = []
   const rows = usableRows(room)
   const clear = doorways(room)
@@ -414,7 +557,7 @@ function dressWalls(rng: Rng, room: Room, taken: [number, number], board = true)
   // Pictures along the rest of it. A blank wall is what makes a room read as
   // unfinished however much furniture is standing in front of it.
   let hung = 0
-  for (let x = room.ix0; x <= room.ix1 && hung < 3;) {
+  for (let x = room.ix0; x <= room.ix1 && hung < pictures;) {
     const art = rng.pick(WALL_ART)
     const clashes =
       x + art.width - 1 > room.ix1 ||
@@ -430,6 +573,8 @@ function dressWalls(rng: Rng, room: Room, taken: [number, number], board = true)
       x++
     }
   }
+
+  if (!corner) return out
 
   const piece = rng.chance(0.4) && rows.to - 2 >= rows.from ? WATER_COOLER : PLANT
   const top = rows.to - piece.height + 1
@@ -476,64 +621,75 @@ function blocks(clear: Set<string>, x: number, y: number, width: number, height:
   return false
 }
 
-/** places a piece of furniture with its top-left corner at (x, y) */
-function stamp(piece: Prefab, x: number, y: number): Placement[] {
+/**
+ * Places a piece of furniture with its top-left corner at (x, y), either as
+ * drawn or mirrored left to right.
+ *
+ * Mirroring a whole prefab means two things at once: every tile of it is
+ * flipped, and the tiles swap ends - what was the left edge has to end up as
+ * the right one, or the piece comes out inside out.
+ */
+function stamp(piece: Prefab, x: number, y: number, flipX = false): Placement[] {
   return piece.parts.map((part) => ({
     layer: part.layer,
     gid: part.gid,
-    tx: x + part.dx,
+    tx: x + (flipX ? piece.width - 1 - part.dx : part.dx),
     ty: y + part.dy,
     widthPx: TILE,
     heightPx: TILE,
+    flipX,
   }))
 }
 
 /**
- * One desk: a top, a body to bump into, whatever is on it, and the chair pulled
- * up to it. Offsets copied from the hand-drawn map, columns 36-38.
+ * A bench: the glass partition, and a desk on whichever side of it somebody
+ * has actually been given a seat.
  *
- * A desk with nothing on it reads as furniture rather than as somebody's. The
- * hand-drawn floor layers screens and papers over almost every desk it has, and
- * only a handful of those are the screens you can actually share - so the rest
- * of ours get the same clutter, just not the interactive kind.
- */
-/**
- * A bench of two desks, back to back, the way the hand-drawn floor builds its
- * production room: the two desk sprites stamped over each other so the bank
- * reads as one piece of furniture, a chair on each side of it, and whatever
- * the people sitting there have left on it.
+ * Only the partition is unconditional. A desk is drawn for a seat and never
+ * without one, because a desk with no chair at it is the first thing anybody
+ * notices - and the bench is not a single piece of furniture that has to be
+ * drawn whole, it is two desks that happen to share a screen.
  */
 function deskBench(
   rng: Rng,
   x: number,
   y: number,
-  seats: Array<{ facing: 'up' | 'down'; computer: boolean }>
+  seats: Array<{ facing: 'up' | 'down'; computer: boolean }>,
+  endPost: boolean
 ): Placement[] {
   const out: Placement[] = []
-  out.push(...stamp(DESK_BENCH, x, y))
-  out.push(...stamp(DESK_BENCH_FAR, x, y))
+  out.push(...stamp(BENCH_PARTITION, x, y))
+  out.push(tile('Objects', BENCH_POST_TOP, x + 2, y - 1))
 
-  // the partition at the end of the bank, three rows so it reaches the floor
-  out.push(...stamp(CUBICLE_DIVIDER, x - 1, y - 1))
+  // Each partition carries the post at its right-hand end, so a run of them
+  // only needs one more to close the left end of the run.
+  if (endPost) out.push(...stamp(BENCH_END_POST, x - 1, y - 1))
 
   for (const seat of seats) {
     const near = seat.facing === 'up'
+
+    // The near desk sits below the partition and is worked at from below; the
+    // far one sits above it and is worked at from above.
+    out.push(...(near ? stamp(BENCH_NEAR_DESK, x, y) : stamp(rng.pick(BENCH_FAR_DESK), x, y - 1)))
+
+    // The surface you can see: the near desk's own front row, and for the far
+    // one the back edge, which is all of it the partition leaves showing.
+    const surface = near ? y + 1 : y - 1
     if (seat.computer) {
-      // The screen stands on the half of the bench its owner sits at: on the
-      // near rows for the chair below, the far rows for the chair above.
       out.push({
         layer: 'Computer',
         gid: rng.pick(COMPUTER_GIDS),
         tx: x,
-        ty: near ? y + 1 : y,
+        ty: surface,
         widthPx: 96,
         heightPx: 64,
       })
-    } else if (!near && rng.chance(0.6)) {
-      // Clutter only goes on the far half - the near half is where the screen
-      // would be, and two sets of things on one desk reads as a junk pile.
-      out.push(...stamp(rng.pick(DESK_CLUTTER), x, y - 1))
+    } else if (rng.chance(0.5)) {
+      // one flat thing left on the desk - anything taller would stand over the
+      // chair the same way a screen would
+      out.push(tile('Objects', rng.pick(DESK_CLUTTER), x + rng.int(0, 2), surface))
     }
+
     out.push(deskChair(near ? 'up' : 'down', x + 1, near ? y + 2 : y - 1))
   }
   return out
@@ -550,7 +706,8 @@ function floorExtras(rng: Rng, layout: Layout, floor: Room): Placement[] {
   const taken = new Set<string>()
   for (const slot of layout.deskSlots) {
     for (let dy = -1; dy <= 3; dy++) {
-      for (let dx = -1; dx <= DESK_BENCH.width; dx++) taken.add(`${slot.x + dx},${slot.y + dy}`)
+      for (let dx = -1; dx <= BENCH_PARTITION.width; dx++)
+        taken.add(`${slot.x + dx},${slot.y + dy}`)
     }
   }
 

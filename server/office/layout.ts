@@ -121,8 +121,9 @@ export function buildLayout(rng: Rng, options: LayoutOptions): Layout {
 
   // --- how tall each side wants to be ---------------------------------------
   const desks = totalDesks(spec)
-  const deskColumns = chooseDeskColumns(desks)
-  const benchRows = desks === 0 ? 1 : Math.ceil(desks / (deskColumns * SEATS_PER_BENCH))
+  const benches = benchesFor(desks, spec.computerDesks)
+  const deskColumns = chooseDeskColumns(benches)
+  const benchRows = benches === 0 ? 1 : Math.ceil(benches / deskColumns)
   const floorHeight = benchRows * BENCH_PITCH + 2
 
   // A single column of rooms turns a big office into a very long walk, so once
@@ -222,7 +223,7 @@ export function buildLayout(rng: Rng, options: LayoutOptions): Layout {
     },
     deskSlots: [],
   }
-  layout.deskSlots = placeDeskSlots(floor, deskColumns, desks)
+  layout.deskSlots = placeDeskSlots(floor, deskColumns, desks, spec.computerDesks)
 
   return layout
 }
@@ -238,7 +239,7 @@ export function buildLayout(rng: Rng, options: LayoutOptions): Layout {
  * the width. When the room is taller than the desks need, the rows are spaced
  * further apart rather than being shuffled about.
  */
-function placeDeskSlots(floor: Room, columns: number, desks: number) {
+function placeDeskSlots(floor: Room, columns: number, desks: number, computerDesks: number) {
   if (desks === 0) return []
 
   // how many benches fit side by side between the walls, past the aisle and
@@ -251,7 +252,7 @@ function placeDeskSlots(floor: Room, columns: number, desks: number) {
   if (fits.length === 0) return []
 
   const perRow = Math.min(fits.length, columns)
-  const rowsNeeded = Math.ceil(desks / (perRow * SEATS_PER_BENCH))
+  const rowsNeeded = Math.ceil(benchesFor(desks, computerDesks) / perRow)
 
   // A bench needs the row above it for the far chair and the row below for the
   // near one, so the first one cannot sit against either wall.
@@ -284,15 +285,27 @@ function placeDeskSlots(floor: Room, columns: number, desks: number) {
     Math.min(centred, floor.ix1 - FLOOR_AISLE - gridWidth + 1)
   )
 
-  // Each bench is two desks, and they are filled far side first so a bank that
-  // is not quite full still reads as a bank rather than a row of odd gaps.
-  const slots: Array<{ x: number; y: number; facing: 'up' | 'down' }> = []
-  for (let row = 0; row < rows && slots.length < desks; row++) {
+  const benchXs: Array<{ x: number; y: number }> = []
+  for (let row = 0; row < rows; row++) {
     const y = bandAt(row)
-    for (const facing of ['down', 'up'] as const) {
-      for (let column = 0; column < perRow && slots.length < desks; column++) {
-        slots.push({ x: left + column * DESK_COLUMN_STEP, y, facing })
-      }
+    for (let column = 0; column < perRow; column++) {
+      benchXs.push({ x: left + column * DESK_COLUMN_STEP, y })
+    }
+  }
+
+  /**
+   * Every bench gets its near desk before any bench gets its far one.
+   *
+   * The near side is the one a screen fits on, so filling it first is what
+   * lets an office of mostly screens have somewhere to put them. It also
+   * means a bench is never seated on the far side alone, which would leave
+   * the near desk drawn with nobody at it.
+   */
+  const slots: Array<{ x: number; y: number; facing: 'up' | 'down' }> = []
+  for (const facing of ['up', 'down'] as const) {
+    for (const bench of benchXs) {
+      if (slots.length >= desks) break
+      slots.push({ x: bench.x, y: bench.y, facing })
     }
   }
   return slots
@@ -305,12 +318,46 @@ function placeDeskSlots(floor: Room, columns: number, desks: number) {
  * choice, a width that divides the total evenly - so every row is full rather
  * than the last one trailing off.
  */
-function chooseDeskColumns(desks: number) {
-  let columns = MIN_DESK_COLUMNS
-  while (Math.ceil(desks / columns) > COMFORTABLE_BANDS && columns < MAX_DESK_COLUMNS) columns++
+/**
+ * How many benches a floor needs.
+ *
+ * Two to a bench, except that a screen only fits on the near desk: the far
+ * one has a single row showing above the partition, and the rest of it is
+ * behind. So an office that asks for more screens than half its desks gets
+ * one bench per screen and a wider floor to stand them on, rather than a
+ * monitor drawn hovering over somebody's chair.
+ */
+function benchesFor(desks: number, computerDesks: number) {
+  if (desks === 0) return 0
+  return Math.max(Math.ceil(desks / SEATS_PER_BENCH), Math.min(computerDesks, desks))
+}
 
-  for (let candidate = columns; candidate <= Math.min(columns + 2, MAX_DESK_COLUMNS); candidate++) {
-    if (desks % candidate === 0) return candidate
+/**
+ * How wide the bank of benches is.
+ *
+ * Roughly as wide as it is deep, rather than as wide as it can be. A bench is
+ * three columns and seven rows, so a bank laid out five across and one deep is
+ * a strip of desks stranded in the middle of the floor - which is what it
+ * looked like before, because the old rule took the first width that divided
+ * the count exactly and five divides five.
+ */
+function chooseDeskColumns(benches: number) {
+  if (benches === 0) return MIN_DESK_COLUMNS
+
+  const square = Math.round(Math.sqrt(benches * (BENCH_PITCH / DESK_COLUMN_STEP) * 0.5))
+  let columns = Math.min(MAX_DESK_COLUMNS, Math.max(MIN_DESK_COLUMNS, square))
+  while (Math.ceil(benches / columns) > COMFORTABLE_BANDS && columns < MAX_DESK_COLUMNS) columns++
+
+  // A width that divides the count exactly leaves no half-empty last row, so
+  // it wins over the ideal shape if it is within a column of it.
+  for (const candidate of [columns, columns + 1, columns - 1]) {
+    if (
+      candidate >= MIN_DESK_COLUMNS &&
+      candidate <= MAX_DESK_COLUMNS &&
+      benches % candidate === 0
+    ) {
+      return candidate
+    }
   }
   return columns
 }

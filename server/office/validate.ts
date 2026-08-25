@@ -47,6 +47,9 @@ export interface PaintedGround {
   collides: (gid: number) => boolean
 }
 
+/** how much room a desk has to have in front of it before it reads as facing one */
+const SEAT_OUTLOOK = 3
+
 export function validate(
   layout: Layout,
   placements: Placement[],
@@ -155,6 +158,36 @@ export function validate(
         .slice(0, 3)
         .join(', ')}`
     )
+  }
+
+  // --- a desk faces its room, not a wall -----------------------------------
+  //
+  // A desk put against the wrong wall passes everything above: it stands on
+  // the floor, it is reachable, nothing is in the doorway. It only shows up as
+  // somebody sitting two tiles from a wall with the whole room - and the door
+  // they are there to receive people through - behind their back.
+  const cornered: string[] = []
+  for (const room of layout.rooms) {
+    if (room.archetype !== 'private') continue
+
+    for (const placement of placements) {
+      if (placement.layer !== 'Chair') continue
+      if (placement.direction !== 'left' && placement.direction !== 'right') continue
+      if (placement.tx < room.ix0 || placement.tx > room.ix1) continue
+      if (placement.ty < room.iy0 || placement.ty > room.iy1) continue
+
+      const step = placement.direction === 'left' ? -1 : 1
+      let ahead = 0
+      for (let x = placement.tx + step; x >= room.ix0 && x <= room.ix1; x += step) {
+        if (isFloor(layout, x, placement.ty)) ahead++
+      }
+      if (ahead < SEAT_OUTLOOK) {
+        cornered.push(`${room.name} seats somebody ${ahead} tile(s) from the wall`)
+      }
+    }
+  }
+  if (cornered.length > 0) {
+    fail('a desk faces the room', cornered.slice(0, 3).join(', '))
   }
 
   // --- and neither is the floor in front of a whiteboard --------------------

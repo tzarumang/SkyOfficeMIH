@@ -1,3 +1,4 @@
+import { withFlipX } from '../../types/Gid'
 import {
   ARCHETYPE_AUDIO,
   FLOOR,
@@ -48,7 +49,7 @@ export function paint(layout: Layout, placements: Placement[], tilesets: unknown
     if (!objects) throw new Error(`Nothing draws the "${placement.layer}" layer.`)
 
     objects.push({
-      gid: placement.gid,
+      gid: withFlipX(placement.gid, placement.flipX),
       height: placement.heightPx,
       id: nextObjectId++,
       name: '',

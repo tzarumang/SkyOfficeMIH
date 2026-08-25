@@ -10,6 +10,7 @@ import { RoomType } from '../types/Rooms'
 
 import { SkyOffice } from './rooms/SkyOffice'
 import { officeDrawingFor, readOfficeId } from './rooms/OfficeMaps'
+import { drawingVersion } from './office/index'
 
 const port = Number(process.env.PORT || 2567)
 const isProduction = process.env.NODE_ENV === 'production'
@@ -94,13 +95,39 @@ app.get('/health', (_req, res) => {
  * not a secret, and knowing one gets you no closer to joining the office that
  * uses it, which still needs the room id and its password.
  */
+/**
+ * Which drawing of an office this build produces.
+ *
+ * The client hangs this off the map url it asks for. An id names the office
+ * and says nothing about how it is drawn, so without this a copy of the old
+ * drawing and a copy of the new one have the same name - which is how three
+ * rounds of furniture fixes stayed invisible to the person testing them.
+ */
+app.get('/office/version', (_req, res) => {
+  res.set('Cache-Control', 'no-cache')
+  res.json({ version: drawingVersion() })
+})
+
 app.get('/office/map/:id.json', (req, res) => {
   const id = readOfficeId(req.params.id)
   if (id === null) return res.status(400).json({ error: 'not an office id' })
 
   try {
-    // the drawing for an id never changes, so it can be cached hard
-    res.set('Cache-Control', 'public, max-age=31536000, immutable')
+    /**
+     * Cached, but revalidated every time.
+     *
+     * This used to be `max-age=31536000, immutable`, on the reasoning that an
+     * id encodes the seed and the spec so the drawing for it never changes.
+     * That is true of the id and false of the generator: change how offices are
+     * furnished and the same id draws a different office, while every browser
+     * that has ever opened it goes on showing the old one - and `immutable`
+     * means it will not even ask. Days of fixes can land on the server and be
+     * invisible to the person testing them.
+     *
+     * `no-cache` still stores the response; it just has to check first. The
+     * check is an ETag away and comes back 304 whenever nothing has moved.
+     */
+    res.set('Cache-Control', 'no-cache')
     return res.json(officeDrawingFor(id))
   } catch (error: any) {
     console.error(`[office] could not draw ${id}:`, error?.message)

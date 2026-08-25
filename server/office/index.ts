@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import fs from 'fs'
 import { Rng } from './rng'
 import { buildLayout, Layout } from './layout'
@@ -159,4 +160,28 @@ export function contentsOf(office: GeneratedOffice) {
     desks: office.layout.deskSlots.length,
     whiteboards: layers.get('Whiteboard') ?? 0,
   }
+}
+
+/**
+ * A fingerprint of what this build of the generator draws.
+ *
+ * An office id says which office; it does not say which *drawing* of it, and
+ * the two are not the same thing. Change how offices are furnished and every
+ * id keeps its name while its drawing changes underneath - so anything holding
+ * a copy of the old one has no way to tell, and a browser that cached it never
+ * finds out. Hanging this off the map's url gives the copy a name that changes
+ * when the drawing does.
+ *
+ * It is measured rather than declared: one office is drawn at a fixed seed and
+ * hashed. Any change to the layout, the furniture or the tiles moves it, and
+ * nobody has to remember to bump anything.
+ */
+let fingerprint: string | null = null
+
+export function drawingVersion(): string {
+  if (fingerprint === null) {
+    const probe = generateOffice({ seed: 1 })
+    fingerprint = createHash('sha1').update(JSON.stringify(probe.map)).digest('hex').slice(0, 8)
+  }
+  return fingerprint
 }
