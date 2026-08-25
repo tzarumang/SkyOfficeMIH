@@ -5,6 +5,7 @@ import TextField from '@mui/material/TextField'
 import Alert from '@mui/material/Alert'
 
 import { useAppSelector } from '../hooks'
+import { joinErrorMessage } from '../joinErrors'
 import phaserGame from '../PhaserGame'
 import Bootstrap from '../scenes/Bootstrap'
 
@@ -48,11 +49,7 @@ export const JoinByIdForm = () => {
       .then(() => bootstrap.launchGame())
       .catch((joinError) => {
         console.error(joinError)
-        setError(
-          joinError?.code === 403
-            ? 'Incorrect password for that room.'
-            : 'No room with that ID, or it is no longer running.'
-        )
+        setError(joinErrorMessage(joinError, 'No room with that ID, or it is no longer running.'))
       })
   }
 

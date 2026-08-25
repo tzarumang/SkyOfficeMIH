@@ -49,6 +49,15 @@ export default class WebRTC {
     this.allowedPeers.set(toPeerId(userId), Date.now() + ALLOW_WINDOW_MS)
   }
 
+  /**
+   * Revokes an allowance before it expires. Walking into a sealed room has to
+   * take effect now rather than in ten seconds - the window that keeps a call
+   * alive while two people drift apart must not hold a door open.
+   */
+  forbidPeer(userId: string) {
+    this.allowedPeers.delete(toPeerId(userId))
+  }
+
   private isPeerAllowed(peerId: string) {
     const expiresAt = this.allowedPeers.get(peerId)
     if (expiresAt === undefined) return false

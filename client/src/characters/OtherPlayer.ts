@@ -13,6 +13,7 @@ export default class OtherPlayer extends Player {
   private connected = false
   private playContainerBody: Phaser.Physics.Arcade.Body
   private myPlayer?: MyPlayer
+  private webRTC?: WebRTC
 
   constructor(
     scene: Phaser.Scene,
@@ -32,6 +33,7 @@ export default class OtherPlayer extends Player {
 
   makeCall(myPlayer: MyPlayer, webRTC: WebRTC) {
     this.myPlayer = myPlayer
+    this.webRTC = webRTC
     const myPlayerId = myPlayer.playerId
 
     // A sealed room keeps its audio inside. Brushing past the doorway of a
@@ -167,6 +169,19 @@ export default class OtherPlayer extends Player {
     // also update playerNameContainer velocity
     this.playContainerBody.setVelocity(vx, vy)
     this.playContainerBody.velocity.setLength(speed)
+
+    // A sealed room shuts at once. Leaving the allowance to time out would
+    // let somebody who was stood beside you in the corridor call in for the
+    // next ten seconds, which is the one thing a sealed room is for.
+    if (this.myPlayer && zoneManager.sealedApart(this, this.myPlayer)) {
+      this.webRTC?.forbidPeer(this.playerId)
+      if (this.connected) {
+        phaserEvents.emit(Event.PLAYER_DISCONNECTED, this.playerId)
+        this.connected = false
+        this.connectionBufferTime = 0
+      }
+      return
+    }
 
     // while currently connected with myPlayer
     // if myPlayer and the otherPlayer stop overlapping, delete video stream
