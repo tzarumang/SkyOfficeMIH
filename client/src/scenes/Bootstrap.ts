@@ -5,6 +5,7 @@ import { ITEM_SPECS, ITEM_TYPES } from '../../../types/Items'
 import { TILESETS } from '../../../types/MapLayers'
 import store from '../stores'
 import { setRoomJoined } from '../stores/RoomStore'
+import { OfficeMapUnavailable } from '../joinErrors'
 
 export default class Bootstrap extends Phaser.Scene {
   private preloadComplete = false
@@ -102,7 +103,7 @@ export default class Bootstrap extends Phaser.Scene {
         // Falling back to the office that ships with the client would draw a
         // building the server is not running, so this has to fail instead.
         if (this.cache.tilemap.has(key)) return resolve(key)
-        reject(new Error(`Could not load the floor plan for office ${id}.`))
+        reject(new OfficeMapUnavailable(id))
       })
       this.load.start()
     })

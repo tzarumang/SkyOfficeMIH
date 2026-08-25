@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import styled from 'styled-components'
+import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
@@ -19,6 +20,7 @@ import {
   totalDesks,
   totalRooms,
 } from '../../../types/Office'
+import { joinErrorMessage } from '../joinErrors'
 import { newOfficeSlug } from '../shareLink'
 import { useAppSelector } from '../hooks'
 
@@ -66,6 +68,7 @@ export const CreateRoomForm = () => {
   const [layout, setLayout] = useState<OfficeLayout>('classic')
   const [office, setOffice] = useState<OfficeSpec>(DEFAULT_OFFICE_SPEC)
   const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState('')
   const [nameFieldEmpty, setNameFieldEmpty] = useState(false)
   const [descriptionFieldEmpty, setDescriptionFieldEmpty] = useState(false)
   const lobbyJoined = useAppSelector((state) => state.room.lobbyJoined)
@@ -91,10 +94,14 @@ export const CreateRoomForm = () => {
       const room: IRoomData =
         lifetimeDays > 0 ? { ...settings, slug: newOfficeSlug(), lifetimeDays } : settings
 
+      setError('')
       bootstrap.network
         .createCustom(room)
         .then(() => bootstrap.launchGame())
-        .catch((error) => console.error(error))
+        .catch((createError) => {
+          console.error(createError)
+          setError(joinErrorMessage(createError, 'Could not create that room. Please try again.'))
+        })
     }
   }
 
@@ -218,6 +225,12 @@ export const CreateRoomForm = () => {
         }
         label="Unlisted - only people with the room ID can find it"
       />
+
+      {error && (
+        <Alert severity="error" variant="outlined">
+          {error}
+        </Alert>
+      )}
 
       <Button variant="contained" color="secondary" type="submit">
         Create

@@ -62,7 +62,8 @@ export function InviteJoin({
     opening
       .then(() => {
         forgetShareLink()
-        bootstrap.launchGame()
+        // returned, so a floor plan that will not load is caught below
+        return bootstrap.launchGame()
       })
       .catch((error) => {
         console.error(error)

@@ -17,6 +17,7 @@ import { CreateRoomForm } from './CreateRoomForm'
 import { JoinByIdForm } from './JoinByIdForm'
 import { useAppSelector } from '../hooks'
 
+import { joinErrorMessage } from '../joinErrors'
 import phaserGame from '../PhaserGame'
 import Bootstrap from '../scenes/Bootstrap'
 
@@ -110,15 +111,22 @@ export default function RoomSelectionDialog() {
   const [showCustomRoom, setShowCustomRoom] = useState(false)
   const [showCreateRoomForm, setShowCreateRoomForm] = useState(false)
   const [showSnackbar, setShowSnackbar] = useState(false)
+  const [error, setError] = useState('')
   const lobbyJoined = useAppSelector((state) => state.room.lobbyJoined)
 
   const handleConnect = () => {
     if (lobbyJoined) {
       const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
+      setError('')
       bootstrap.network
         .joinOrCreatePublic()
         .then(() => bootstrap.launchGame())
-        .catch((error) => console.error(error))
+        .catch((joinError) => {
+          console.error(joinError)
+          setError(
+            joinErrorMessage(joinError, 'Could not open the public lobby. Please try again.')
+          )
+        })
     } else {
       setShowSnackbar(true)
     }
@@ -145,6 +153,11 @@ export default function RoomSelectionDialog() {
       </Snackbar>
       <Backdrop>
         <Wrapper>
+          {error && (
+            <Alert severity="error" variant="outlined">
+              {error}
+            </Alert>
+          )}
           {invitedTo ? (
             <InviteJoin
               invite={invitedTo}

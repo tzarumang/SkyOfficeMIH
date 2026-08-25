@@ -20,6 +20,7 @@ import LockIcon from '@mui/icons-material/Lock'
 import { useAppSelector } from '../hooks'
 import { getAvatarString, getColorByString } from '../util'
 
+import { joinErrorMessage } from '../joinErrors'
 import phaserGame from '../PhaserGame'
 import Bootstrap from '../scenes/Bootstrap'
 
@@ -91,18 +92,24 @@ export const CustomRoomTable = () => {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
   const [showPasswordError, setShowPasswordError] = useState(false)
   const [passwordFieldEmpty, setPasswordFieldEmpty] = useState(false)
+  const [joinError, setJoinError] = useState('')
   const lobbyJoined = useAppSelector((state) => state.room.lobbyJoined)
   const availableRooms = useAppSelector((state) => state.room.availableRooms)
 
   const handleJoinClick = (roomId: string, password: string | null) => {
     if (!lobbyJoined) return
     const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
+    setJoinError('')
     bootstrap.network
       .joinCustomById(roomId, password)
       .then(() => bootstrap.launchGame())
       .catch((error) => {
         console.error(error)
-        if (password) setShowPasswordError(true)
+        if (password && error?.code === 403) {
+          setShowPasswordError(true)
+          return
+        }
+        setJoinError(joinErrorMessage(error, 'Could not join that room. It may have closed.'))
       })
   }
 
@@ -125,6 +132,11 @@ export const CustomRoomTable = () => {
     <MessageText>There are no custom rooms now, create one or join the public lobby.</MessageText>
   ) : (
     <>
+      {joinError && (
+        <Alert severity="error" variant="outlined">
+          {joinError}
+        </Alert>
+      )}
       <CustomRoomTableContainer component={Paper}>
         <Table>
           <TableHead>
