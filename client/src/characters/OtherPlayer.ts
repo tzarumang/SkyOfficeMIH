@@ -52,6 +52,11 @@ export default class OtherPlayer extends Player {
     }
   }
 
+  setPlayerTexture(texture: string) {
+    this.playerTexture = texture
+    this.anims.play(`${this.playerTexture}_idle_down`, true)
+  }
+
   updateOtherPlayer(field: string, value: number | string | boolean) {
     switch (field) {
       case 'name':

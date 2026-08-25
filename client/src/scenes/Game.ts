@@ -18,6 +18,8 @@ import { IPlayer } from '../../../types/IOfficeState'
 import { PlayerBehavior } from '../../../types/PlayerBehavior'
 import { ItemType } from '../../../types/Items'
 import { textureFromAnim } from '../util'
+import { ensureAvatarTexture } from '../avatars/spriteFactory'
+import { isAvatar } from '../../../types/Avatar'
 
 import store from '../stores'
 import { setFocused, setShowChat } from '../stores/ChatStore'
@@ -224,10 +226,11 @@ export default class Game extends Phaser.Scene {
 
   // function to add new player to the otherPlayer group
   private handlePlayerJoined(newPlayer: IPlayer, id: string) {
-    // the avatar someone picked is only implied by their animation key, e.g.
-    // lucy_idle_down - without this everyone else showed up as Adam until
-    // their first animation update arrived
-    const texture = textureFromAnim(newPlayer.anim)
+    // Avatars are generated, so the texture may not exist on this client yet.
+    // It is deterministic from the descriptor, so everyone builds the same one.
+    const texture = isAvatar(newPlayer.avatar)
+      ? ensureAvatarTexture(this, newPlayer.avatar)
+      : textureFromAnim(newPlayer.anim)
     const otherPlayer = this.add.otherPlayer(newPlayer.x, newPlayer.y, texture, id, newPlayer.name)
     this.otherPlayers.add(otherPlayer)
     this.otherPlayerMap.set(id, otherPlayer)
@@ -253,6 +256,13 @@ export default class Game extends Phaser.Scene {
 
   // function to update target position upon receiving player updates
   private handlePlayerUpdated(field: string, value: number | string, id: string) {
+    // someone regenerating their avatar mid-session needs the new sheet built
+    if (field === 'avatar' && typeof value === 'string' && isAvatar(value)) {
+      const texture = ensureAvatarTexture(this, value)
+      this.otherPlayerMap.get(id)?.setPlayerTexture(texture)
+      return
+    }
+
     const otherPlayer = this.otherPlayerMap.get(id)
     otherPlayer?.updateOtherPlayer(field, value)
   }
