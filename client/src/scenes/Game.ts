@@ -175,6 +175,21 @@ export default class Game extends Phaser.Scene {
      * people who were already here.
      */
     this.network.replayWhoIsHere()
+
+    /**
+     * And the state of our own player, for the same reason.
+     *
+     * Bootstrap asks the browser whether camera permission was granted on a
+     * previous visit, and if it was, the stream can arrive before this scene
+     * exists - so the announcement that we are on camera is made to nobody.
+     * `videoConnected` is one of the conditions for placing a call, so missing
+     * it means proximity chat never starts at all, however close two people
+     * stand. The store holds the answer either way, so it is read rather than
+     * waited for.
+     */
+    const user = store.getState().user
+    if (user.videoConnected) this.myPlayer.videoConnected = true
+    if (user.loggedIn) this.myPlayer.readyToConnect = true
   }
 
   /**
