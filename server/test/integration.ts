@@ -691,25 +691,31 @@ function generatedOfficeUnits() {
 
 /** GETs a path off the test server and returns the status and parsed body */
 function getJson(path: string) {
-  return new Promise<{ status: number; body: any }>((resolve, reject) => {
-    const request = http.request(
-      { host: '127.0.0.1', port: Number(process.env.PORT), path, method: 'GET' },
-      (response) => {
-        let raw = ''
-        response.setEncoding('utf8')
-        response.on('data', (chunk) => (raw += chunk))
-        response.on('end', () => {
-          try {
-            resolve({ status: response.statusCode || 0, body: raw ? JSON.parse(raw) : null })
-          } catch {
-            resolve({ status: response.statusCode || 0, body: null })
-          }
-        })
-      }
-    )
-    request.on('error', reject)
-    request.end()
-  })
+  return new Promise<{ status: number; body: any; headers: Record<string, any> }>(
+    (resolve, reject) => {
+      const request = http.request(
+        { host: '127.0.0.1', port: Number(process.env.PORT), path, method: 'GET' },
+        (response) => {
+          let raw = ''
+          response.setEncoding('utf8')
+          response.on('data', (chunk) => (raw += chunk))
+          response.on('end', () => {
+            try {
+              resolve({
+                status: response.statusCode || 0,
+                body: raw ? JSON.parse(raw) : null,
+                headers: response.headers,
+              })
+            } catch {
+              resolve({ status: response.statusCode || 0, body: null, headers: response.headers })
+            }
+          })
+        }
+      )
+      request.on('error', reject)
+      request.end()
+    }
+  )
 }
 
 async function generatedRoomTests() {
@@ -796,6 +802,18 @@ async function generatedRoomTests() {
   check(
     'and the same seed always serves the same drawing',
     JSON.stringify(served.body) === JSON.stringify(officeDrawingFor(firstId)),
+    true
+  )
+
+  // An id encodes the seed and the spec, so it is tempting to serve the
+  // drawing as immutable - and that was the bug. The id does not change but
+  // the generator does, and a browser holding an immutable copy will not even
+  // ask: days of fixes land on the server and stay invisible to whoever is
+  // testing them. It has to be allowed to check.
+  const caching = String(served.headers['cache-control'] ?? '')
+  check(
+    'a floor plan may be cached but never without checking',
+    !/immutable/.test(caching) && /no-cache|max-age=0|must-revalidate/.test(caching),
     true
   )
 
