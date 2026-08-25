@@ -5,6 +5,8 @@ export default class Background extends Phaser.Scene {
   private cloud!: Phaser.Physics.Arcade.Group
   private cloudKey!: string
   private backdropKey!: string
+  private backdrop!: Phaser.GameObjects.Image
+  private sunMoon!: Phaser.GameObjects.Image
 
   constructor() {
     super('background')
@@ -25,15 +27,20 @@ export default class Background extends Phaser.Scene {
       this.cameras.main.setBackgroundColor('#2c4464')
     }
 
-    // Add backdrop image
-    const backdropImage = this.add.image(sceneWidth / 2, sceneHeight / 2, this.backdropKey)
-    const scale = Math.max(sceneWidth / backdropImage.width, sceneHeight / backdropImage.height)
-    backdropImage.setScale(scale).setScrollFactor(0)
+    this.backdrop = this.add.image(0, 0, this.backdropKey).setScrollFactor(0)
+    this.sunMoon = this.add.image(0, 0, 'sun_moon').setScrollFactor(0)
+    this.fitToScreen()
 
-    // Add sun or moon image
-    const sunMoonImage = this.add.image(sceneWidth / 2, sceneHeight / 2, 'sun_moon')
-    const scale2 = Math.max(sceneWidth / sunMoonImage.width, sceneHeight / sunMoonImage.height)
-    sunMoonImage.setScale(scale2).setScrollFactor(0)
+    /**
+     * The sky is sized to the window, so it has to be sized again when the
+     * window changes. Without this it keeps whatever size it was built at and
+     * a wider window shows the camera's flat backing colour beside it, with a
+     * hard seam where the picture stops.
+     */
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.fitToScreen, this)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.fitToScreen, this)
+    })
 
     // Add 24 clouds at random positions and with random speeds
     const frames = this.textures.get(this.cloudKey).getFrameNames()
@@ -47,6 +54,18 @@ export default class Background extends Phaser.Scene {
         .get(x, y, this.cloudKey, frames[i % 6])
         .setScale(3)
         .setVelocity(velocity, 0)
+    }
+  }
+
+  /** centres the sky and scales it to cover whatever the window is now */
+  private fitToScreen() {
+    const width = this.scale.width
+    const height = this.scale.height
+
+    for (const image of [this.backdrop, this.sunMoon]) {
+      if (!image) continue
+      const scale = Math.max(width / image.width, height / image.height)
+      image.setPosition(width / 2, height / 2).setScale(scale)
     }
   }
 
