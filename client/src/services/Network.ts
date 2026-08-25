@@ -1,3 +1,4 @@
+import { toPeerId } from '../util'
 import { Client, Room } from 'colyseus.js'
 import { IComputer, IOfficeState, IPlayer, IWhiteboard } from '../../../types/IOfficeState'
 import { Message } from '../../../types/Messages'
@@ -331,6 +332,27 @@ export default class Network {
    * Anyone still choosing a name is skipped; the event carrying it arrives
    * normally.
    */
+  /**
+   * Where everybody is, keyed the way WebRTC names them.
+   *
+   * Read straight from the room rather than from the game, because the game
+   * stops running the moment its window is not the one being painted - and a
+   * call can arrive at any time, whether or not anything is being drawn.
+   */
+  peerPositions(): Map<string, { x: number; y: number }> {
+    const positions = new Map<string, { x: number; y: number }>()
+    this.room?.state.players.forEach((player: IPlayer, id: string) => {
+      positions.set(toPeerId(id), { x: player.x, y: player.y })
+    })
+    return positions
+  }
+
+  /** and where we are, from the same place */
+  myPosition(): { x: number; y: number } | undefined {
+    const me = this.room?.state.players.get(this.mySessionId)
+    return me ? { x: me.x, y: me.y } : undefined
+  }
+
   replayWhoIsHere() {
     if (!this.room) return
 

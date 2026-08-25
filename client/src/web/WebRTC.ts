@@ -1,9 +1,18 @@
+import { zoneManager } from '../zones/ZoneManager'
 import Peer, { MediaConnection } from 'peerjs'
 import Network from '../services/Network'
 import store from '../stores'
 import { setVideoConnected } from '../stores/UserStore'
 import { peerOptions } from './peerConfig'
 import { toPeerId } from '../util'
+
+/**
+ * How close two people have to be for a call between them to be expected,
+ * in world pixels. Wider than the overlap the game uses to *place* a call,
+ * because this is the check on the receiving end and the two clients do not
+ * agree on each other's position to the pixel.
+ */
+const NEARBY_PIXELS = 96
 
 /** how long a peer stays callable after we last saw it next to us */
 const ALLOW_WINDOW_MS = 10000
@@ -38,7 +47,6 @@ export default class WebRTC {
     this.initialize()
   }
 
-
   /**
    * Proximity is what authorizes a call, so the game tells us who is currently
    * close enough. The short window past the last overlap keeps a call that is
@@ -70,13 +78,38 @@ export default class WebRTC {
     return true
   }
 
+  /**
+   * Whether this peer is standing next to us according to the room itself.
+   *
+   * The allowance above is recorded by the game when two bodies overlap, and
+   * the game only runs while its window is being painted. A window that is
+   * behind another one still holds its connection open and still receives
+   * calls - it had simply stopped noticing anybody was there, so it refused
+   * every one of them. Worse, the caller does not try twice: one refusal and
+   * the pair stays silent for as long as they stand together.
+   *
+   * So the room is asked instead. It knows where everybody is whether or not
+   * anything is being drawn, and it is the same source both clients trust.
+   * A sealed room still seals: that rule is about which room somebody is in,
+   * not about who noticed them.
+   */
+  private isPeerNearby(peerId: string) {
+    const me = this.network.myPosition()
+    const them = this.network.peerPositions().get(peerId)
+    if (!me || !them) return false
+
+    if (Math.hypot(me.x - them.x, me.y - them.y) > NEARBY_PIXELS) return false
+
+    return !zoneManager.sealedApart(them, me)
+  }
+
   initialize() {
     this.myPeer.on('call', (call) => {
       // Peer ids are Colyseus session ids, which every client in the room can
       // read out of room state - and the PeerJS broker is shared with the
       // whole internet. Without this check, answering would hand our camera
       // and microphone to anyone who knows or guesses an id.
-      if (!this.isPeerAllowed(call.peer)) {
+      if (!this.isPeerAllowed(call.peer) && !this.isPeerNearby(call.peer)) {
         console.warn('rejected call from peer that is not nearby:', call.peer)
         call.close()
         return
@@ -135,6 +168,18 @@ export default class WebRTC {
         call.on('stream', (userVideoStream) => {
           this.addVideoStream(video, userVideoStream)
         })
+
+        /**
+         * A call that never came to anything must not be remembered as one that
+         * did. While it sits in `peers` this side will not dial that peer
+         * again, so a single failure - refused, or lost on the way - is
+         * permanent for as long as the two of them stay put.
+         */
+        const forget = () => {
+          if (this.peers.get(sanitizedId)?.call === call) this.peers.delete(sanitizedId)
+        }
+        call.on('error', forget)
+        call.on('close', forget)
 
         // on close is triggered manually with deleteVideoStream()
       }
