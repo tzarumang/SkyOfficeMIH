@@ -44,6 +44,13 @@ interface TiledLayer {
   name: string
   type: string
   objects?: TiledObject[]
+  /** a tile layer carries its gids here, row by row */
+  data?: number[]
+}
+
+interface TiledTileset {
+  firstgid: number
+  tiles?: Array<{ id: number; properties?: Array<{ name: string; value: unknown }> }>
 }
 
 export interface TiledMap {
@@ -52,6 +59,7 @@ export interface TiledMap {
   tilewidth: number
   tileheight: number
   layers: TiledLayer[]
+  tilesets?: TiledTileset[]
   properties?: Array<{ name: string; value: unknown }>
 }
 
@@ -63,6 +71,13 @@ export interface OfficeMap {
   /** where a player appears, in world pixels */
   spawn: { x: number; y: number }
   boxes(itemType: ItemType): ItemBox[]
+  /**
+   * Whether anything solid stands between two points. Reaching an item is not
+   * only a matter of distance: a board hung on a wall is a couple of tiles from
+   * the room on the other side of that wall, and being close to something you
+   * cannot see is not the same as being able to use it.
+   */
+  hasLineOfSight(from: { x: number; y: number }, to: { x: number; y: number }): boolean
 }
 
 /** the spawn the hand-drawn office has always used */
@@ -75,6 +90,30 @@ function readSpawn(map: TiledMap) {
   const x = value('spawnX')
   const y = value('spawnY')
   return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : CLASSIC_SPAWN
+}
+
+/**
+ * The tiles a player cannot walk through, read the way the client reads them:
+ * the ground layer, and the per-tile `collides` flag of the tileset each gid
+ * came from.
+ */
+function readSolidTiles(map: TiledMap) {
+  const solid = new Set<number>()
+  const ground = map.layers.find((layer) => layer.type === 'tilelayer' && layer.data)
+  if (!ground?.data) return solid
+
+  const blocking = new Set<number>()
+  for (const tileset of map.tilesets ?? []) {
+    for (const tile of tileset.tiles ?? []) {
+      const collides = (tile.properties ?? []).find((property) => property.name === 'collides')
+      if (collides?.value) blocking.add(tileset.firstgid + tile.id)
+    }
+  }
+
+  ground.data.forEach((gid, index) => {
+    if (gid !== 0 && blocking.has(gid)) solid.add(index)
+  })
+  return solid
 }
 
 const MAP_RELATIVE_PATH = path.join('client', 'public', 'assets', 'map', 'map.json')
@@ -126,11 +165,38 @@ export function officeMapFrom(map: TiledMap, id: string | null): OfficeMap {
     SHARED_ITEM_TYPES.map((itemType) => [itemType, readItemLayer(map, itemType)])
   )
 
+  const solid = readSolidTiles(map)
+  const blocked = (tileX: number, tileY: number) => {
+    if (tileX < 0 || tileY < 0 || tileX >= map.width || tileY >= map.height) return false
+    return solid.has(tileY * map.width + tileX)
+  }
+
   return {
     id,
     bounds: { width: map.width * map.tilewidth, height: map.height * map.tileheight },
     spawn: readSpawn(map),
     boxes: (itemType) => boxes.get(itemType) ?? [],
+    hasLineOfSight: (from, to) => {
+      const fromTile = {
+        x: Math.floor(from.x / map.tilewidth),
+        y: Math.floor(from.y / map.tileheight),
+      }
+      const toTile = { x: Math.floor(to.x / map.tilewidth), y: Math.floor(to.y / map.tileheight) }
+
+      // Step along the line in half tiles. The tiles at either end are skipped:
+      // the player stands on one, and an item mounted on a wall sits on the
+      // other, so neither ever counts as being in the way.
+      const steps = Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / (map.tilewidth / 2))
+      for (let step = 1; step < steps; step++) {
+        const at = step / steps
+        const tileX = Math.floor((from.x + (to.x - from.x) * at) / map.tilewidth)
+        const tileY = Math.floor((from.y + (to.y - from.y) * at) / map.tileheight)
+        if (tileX === fromTile.x && tileY === fromTile.y) continue
+        if (tileX === toTile.x && tileY === toTile.y) continue
+        if (blocked(tileX, tileY)) return false
+      }
+      return true
+    },
   }
 }
 

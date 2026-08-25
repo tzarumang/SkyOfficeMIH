@@ -88,7 +88,8 @@ const ROOM_HEIGHTS: Record<Exclude<Archetype, 'open' | 'corridor'>, number> = {
 }
 
 /** a desk with its chair is three columns wide and four rows deep, plus a gap */
-const DESK_COLUMN_STEP = 4
+const DESK_WIDTH = 3
+const DESK_COLUMN_STEP = DESK_WIDTH + 1
 const DESK_BAND_STEP = 5
 const MIN_DESK_COLUMNS = 3
 const MAX_DESK_COLUMNS = 8
@@ -197,42 +198,68 @@ export function buildLayout(rng: Rng, options: LayoutOptions): Layout {
 }
 
 /**
- * Where each desk goes on the production floor.
+ * Where each desk goes on the production floor: a grid, centred in the room.
  *
- * The desks are spread over every band the room has rather than packed into the
- * top of it - a floor sized for the rooms beside it can end up taller than the
- * desks strictly need, and desks bunched at one end is exactly what "looks
- * empty" means.
+ * Every row holds the same number of desks and every column lines up. An
+ * earlier version spread the desks over all the space it had, which filled the
+ * room but left the rows ragged - a floor plan nobody would draw.
+ *
+ * Only the last row is ever short, and only when the total does not divide by
+ * the width. When the room is taller than the desks need, the rows are spaced
+ * further apart rather than being shuffled about.
  */
 function placeDeskSlots(floor: Room, columns: number, desks: number) {
   if (desks === 0) return []
 
-  const from = floor.iy0 + 1
-  const columnXs: number[] = []
+  // how many columns of desks actually fit between the walls
+  const fits: number[] = []
   for (let i = 0; i < columns; i++) {
     const x = floor.ix0 + 1 + i * DESK_COLUMN_STEP
-    if (x + 2 <= floor.ix1 - 1) columnXs.push(x)
+    if (x + DESK_WIDTH - 1 <= floor.ix1 - 1) fits.push(x)
   }
+  if (fits.length === 0) return []
+
+  const perRow = Math.min(fits.length, columns)
+  const rowsNeeded = Math.ceil(desks / perRow)
 
   const bandYs: number[] = []
-  for (let y = from; y + 3 <= floor.iy1; y += DESK_BAND_STEP) bandYs.push(y)
+  for (let y = floor.iy0 + 1; y + 3 <= floor.iy1; y += DESK_BAND_STEP) bandYs.push(y)
+  if (bandYs.length === 0) return []
+
+  // Spare rows go into the spacing between rows, not into the arrangement.
+  const rows = Math.min(rowsNeeded, bandYs.length)
+  const spacing = Math.floor(bandYs.length / rows)
+  const offset = Math.floor((bandYs.length - (rows - 1) * spacing - 1) / 2)
+
+  // centre the grid, so the floor is not all desks down one side
+  const gridWidth = (perRow - 1) * DESK_COLUMN_STEP + DESK_WIDTH
+  const room = floor.ix1 - floor.ix0 + 1
+  const left = floor.ix0 + Math.max(1, Math.floor((room - gridWidth) / 2))
 
   const slots: Array<{ x: number; y: number }> = []
-  for (const y of bandYs) for (const x of columnXs) slots.push({ x, y })
-  if (slots.length === 0) return []
-
-  if (desks >= slots.length) return slots.slice(0, desks)
-
-  // evenly spaced, so gaps are shared out instead of all landing at the end
-  const chosen: Array<{ x: number; y: number }> = []
-  for (let i = 0; i < desks; i++) chosen.push(slots[Math.floor((i * slots.length) / desks)])
-  return chosen
+  for (let row = 0; row < rows && slots.length < desks; row++) {
+    const y = bandYs[offset + row * spacing]
+    for (let column = 0; column < perRow && slots.length < desks; column++) {
+      slots.push({ x: left + column * DESK_COLUMN_STEP, y })
+    }
+  }
+  return slots
 }
 
-/** wide enough that the production floor is not a single long column of desks */
+/**
+ * How many desks to a row.
+ *
+ * Wide enough that the floor is not one long column, and where there is a
+ * choice, a width that divides the total evenly - so every row is full rather
+ * than the last one trailing off.
+ */
 function chooseDeskColumns(desks: number) {
   let columns = MIN_DESK_COLUMNS
   while (Math.ceil(desks / columns) > COMFORTABLE_BANDS && columns < MAX_DESK_COLUMNS) columns++
+
+  for (let candidate = columns; candidate <= Math.min(columns + 2, MAX_DESK_COLUMNS); candidate++) {
+    if (desks % candidate === 0) return candidate
+  }
   return columns
 }
 
