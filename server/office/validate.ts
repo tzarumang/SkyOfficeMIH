@@ -196,12 +196,14 @@ export function validate(
   // reachability check above is satisfied by the wall row it overlaps. What
   // matters is the row below it, which is the only place you can stand to use
   // it. A cabinet pushed under a board is a board nobody can open.
-  const blockedBoards: string[] = []
+  // every tile a player is stopped by, which both of the checks below need
   const solidCells = new Set<string>()
   for (const placement of placements) {
     if (!SOLID_LAYERS.has(placement.layer)) continue
     for (const [x, y] of occupiedTiles(placement)) solidCells.add(`${x},${y}`)
   }
+
+  const blockedBoards: string[] = []
   for (const placement of placements) {
     if (placement.layer !== 'Whiteboard') continue
     const columns = Math.max(1, Math.round(placement.widthPx / TILE))
@@ -219,6 +221,50 @@ export function validate(
       `${blockedBoards.length} board(s) have nowhere to stand: ${blockedBoards
         .slice(0, 3)
         .join(', ')}`
+    )
+  }
+
+  // --- a seat is somewhere you can actually sit ----------------------------
+  //
+  // The reachability above is about the floor plan: it knows walls from floor
+  // and nothing about what is standing on the floor. So a desk with its alcove
+  // pushed against a wall passes it - the tile the chair is on is floor, and
+  // floor is reachable - while in the game the desk itself is what walls the
+  // seat in. Nobody can get to it, and nothing said so.
+
+  const walkable = floodFill(layout, spawn, solidCells)
+
+  // The general form of the same rule: no piece of floor anywhere may be shut
+  // off by what is standing on it. A seat you cannot reach is the version of
+  // this you notice; half a lounge behind a pool table is the version you do
+  // not, until somebody walks the room.
+  const stranded: string[] = []
+  for (const room of layout.rooms) {
+    for (let y = room.iy0; y <= room.iy1; y++) {
+      for (let x = room.ix0; x <= room.ix1; x++) {
+        if (!isFloor(layout, x, y)) continue
+        if (solidCells.has(`${x},${y}`)) continue
+        if (!walkable.has(y * width + x)) stranded.push(`${x},${y} in ${room.name}`)
+      }
+    }
+  }
+  if (stranded.length > 0) {
+    fail(
+      'furniture leaves the floor in one piece',
+      `${stranded.length} tile(s) shut off: ${stranded.slice(0, 3).join(', ')}`
+    )
+  }
+  const boxedIn: string[] = []
+  for (const placement of placements) {
+    if (placement.layer !== 'Chair') continue
+    if (!walkable.has(placement.ty * width + placement.tx)) {
+      boxedIn.push(`${placement.tx},${placement.ty}`)
+    }
+  }
+  if (boxedIn.length > 0) {
+    fail(
+      'a chair can be sat on',
+      `${boxedIn.length} seat(s) cannot be walked to: ${boxedIn.slice(0, 3).join(', ')}`
     )
   }
 
@@ -327,9 +373,14 @@ function interiorsOverlap(a: Room, b: Room) {
 }
 
 /** every floor tile a player can actually walk to from where they appear */
-function floodFill(layout: Layout, from: { x: number; y: number }) {
+function floodFill(
+  layout: Layout,
+  from: { x: number; y: number },
+  blocked: Set<string> = new Set()
+) {
   const seen = new Set<number>()
   if (layout.cells[from.y * layout.width + from.x] !== FLOOR) return seen
+  if (blocked.has(`${from.x},${from.y}`)) return seen
 
   const queue = [from]
   seen.add(from.y * layout.width + from.x)
@@ -346,6 +397,7 @@ function floodFill(layout: Layout, from: { x: number; y: number }) {
       const at = next.y * layout.width + next.x
       if (seen.has(at)) continue
       if (!isFloor(layout, next.x, next.y)) continue
+      if (blocked.has(`${next.x},${next.y}`)) continue
       seen.add(at)
       queue.push(next)
     }
