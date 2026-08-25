@@ -95,6 +95,11 @@ const MIN_DESK_COLUMNS = 3
 const MAX_DESK_COLUMNS = 8
 /** past this the production floor is a long thin corridor of desks, so widen instead */
 const COMFORTABLE_BANDS = 6
+/**
+ * Columns of clear floor kept against the walls the production floor is
+ * entered through, so the desks nearest a door are not standing in it.
+ */
+const FLOOR_AISLE = 2
 /** past this a single column of rooms is a corridor march, so use two */
 const MAX_SINGLE_COLUMN = 34
 
@@ -120,7 +125,7 @@ export function buildLayout(rng: Rng, options: LayoutOptions): Layout {
 
   // The production floor is as wide as its desks need, and never narrower than
   // the one on the hand-drawn map.
-  const floorWidth = Math.max(deskColumns * DESK_COLUMN_STEP + 2, 15)
+  const floorWidth = Math.max(deskColumns * DESK_COLUMN_STEP + 2 * FLOOR_AISLE + 1, 15)
   const floorRight = CORRIDOR_RIGHT + floorWidth
   const right = farStack.length > 0 ? floorRight + ROOM_BLOCK_WIDTH : floorRight
   const width = right + 1 + MARGIN
@@ -231,10 +236,16 @@ function placeDeskSlots(floor: Room, columns: number, desks: number) {
   const spacing = Math.floor(bandYs.length / rows)
   const offset = Math.floor((bandYs.length - (rows - 1) * spacing - 1) / 2)
 
-  // centre the grid, so the floor is not all desks down one side
+  // Centred, but never closer to a wall than the aisle - the floor is entered
+  // through both of its side walls, and a desk in a doorway is a desk you have
+  // to squeeze past to get onto the floor at all.
   const gridWidth = (perRow - 1) * DESK_COLUMN_STEP + DESK_WIDTH
   const room = floor.ix1 - floor.ix0 + 1
-  const left = floor.ix0 + Math.max(1, Math.floor((room - gridWidth) / 2))
+  const centred = floor.ix0 + Math.floor((room - gridWidth) / 2)
+  const left = Math.max(
+    floor.ix0 + FLOOR_AISLE,
+    Math.min(centred, floor.ix1 - FLOOR_AISLE - gridWidth + 1)
+  )
 
   const slots: Array<{ x: number; y: number }> = []
   for (let row = 0; row < rows && slots.length < desks; row++) {

@@ -87,6 +87,23 @@ export function furnish(rng: Rng, layout: Layout, spec: OfficeSpec): Placement[]
 /** the rows a room can hold furniture in - the skirt row stays clear */
 const usableRows = (room: Room) => ({ from: room.iy0 + 1, to: room.iy1 })
 
+/** how much floor a doorway needs to itself, in columns */
+const DOOR_CLEARANCE = 2
+
+/**
+ * The columns a room may stand furniture in. A room is entered through one of
+ * its side walls, so the couple of columns against that wall are the way in
+ * rather than somewhere to put a pool table.
+ */
+function usableColumns(room: Room) {
+  const onLeft = room.doors.some((door) => door.x === room.x0)
+  const onRight = room.doors.some((door) => door.x === room.x1)
+  return {
+    from: onLeft ? room.ix0 + DOOR_CLEARANCE : room.ix0,
+    to: onRight ? room.ix1 - DOOR_CLEARANCE : room.ix1,
+  }
+}
+
 /**
  * A table with chairs down both long sides and one at each end, the way the
  * hand-drawn conference room is laid out.
@@ -94,8 +111,9 @@ const usableRows = (room: Room) => ({ from: room.iy0 + 1, to: room.iy1 })
 function meetingRoom(rng: Rng, room: Room): Placement[] {
   const out: Placement[] = []
   const rows = usableRows(room)
+  const cols = usableColumns(room)
   const height = rows.to - rows.from + 1
-  const width = room.ix1 - room.ix0 + 1
+  const width = cols.to - cols.from + 1
 
   // A table is three rows, with a row of chairs above it and another below. In
   // a room too short for both, the near side keeps its chairs and the far side
@@ -105,7 +123,7 @@ function meetingRoom(rng: Rng, room: Room): Placement[] {
   if (height < needed || width < 5) return [chair('down', room.ix0 + 1, rows.to)]
 
   const tableWidth = Math.min(width - 4, 3 + 2 * rng.int(1, 3))
-  const tx = room.ix0 + Math.floor((width - tableWidth) / 2)
+  const tx = cols.from + Math.floor((width - tableWidth) / 2)
   const ty = rows.from + Math.floor((height - needed) / 2) + 1
 
   const row = (
@@ -149,16 +167,27 @@ function oneOnOneRoom(rng: Rng, room: Room): Placement[] {
   const out: Placement[] = []
   const bottom = rows.to
 
-  // the desk in the far corner, with the chair tucked into the crook of it
-  const deskX = room.ix1 - CORNER_DESK.width
+  /**
+   * The desk goes against the wall furthest from the way in.
+   *
+   * A room is entered through one of its side walls, and putting the desk on
+   * that same wall means walking straight into the back of it - the door ends
+   * up behind whoever is sitting there. Everything else then fills the half
+   * nearer the door, which is where a visitor would stop anyway.
+   */
+  const doorOnRight = room.doors.some((door) => door.x === room.x1)
+  const deskX = doorOnRight ? room.ix0 + 1 : room.ix1 - CORNER_DESK.width
   const deskTop = Math.max(rows.from, bottom - CORNER_DESK.height + 1)
   out.push(...stamp(CORNER_DESK, deskX, deskTop))
   out.push(chair('left', deskX + 1, Math.min(bottom, deskTop + 2)))
 
-  // a sofa along the near wall, three seats side by side
+  // a sofa along the wall the desk did not take, three seats side by side
+  const sofaFrom = doorOnRight ? room.ix1 - SOFA_SEATS.length : room.ix0 + 1
+  const clearOfDesk = (x: number) => (doorOnRight ? x > deskX + CORNER_DESK.width : x < deskX - 1)
+
   SOFA_SEATS.forEach((gid, index) => {
-    const x = room.ix0 + 1 + index
-    if (x < deskX - 1) {
+    const x = sofaFrom + index
+    if (x >= room.ix0 && x <= room.ix1 && clearOfDesk(x)) {
       out.push({
         layer: 'Chair',
         gid,
@@ -171,12 +200,24 @@ function oneOnOneRoom(rng: Rng, room: Room): Placement[] {
     }
   })
 
-  // and a cabinet under it, if the room is deep enough to take one
-  if (bottom - rows.from >= 3 && room.ix0 + 2 < deskX - 1) {
-    out.push(...stamp(CABINET, room.ix0 + 1, Math.min(bottom - 1, rows.from + 2)))
+  // A cabinet beside the desk rather than by the door - it is the one other
+  // solid thing in the room, and solid things belong away from the way in.
+  const clear = doorways(room)
+  const cabinetX = doorOnRight ? deskX + CORNER_DESK.width + 1 : deskX - CABINET.width - 1
+  const cabinetTop = Math.min(bottom - 1, rows.from + 2)
+  if (
+    bottom - rows.from >= 3 &&
+    cabinetX >= room.ix0 &&
+    cabinetX + CABINET.width - 1 <= room.ix1 &&
+    !blocks(clear, cabinetX, cabinetTop, CABINET.width, CABINET.height)
+  ) {
+    out.push(...stamp(CABINET, cabinetX, cabinetTop))
   }
 
-  out.push(...dressWalls(rng, room, [deskX, room.ix1]))
+  const used: [number, number] = doorOnRight
+    ? [deskX, deskX + CORNER_DESK.width]
+    : [deskX, room.ix1]
+  out.push(...dressWalls(rng, room, used))
   out.push(whiteboard(rng, room))
   return out
 }
@@ -188,18 +229,19 @@ function oneOnOneRoom(rng: Rng, room: Room): Placement[] {
 function lounge(rng: Rng, room: Room): Placement[] {
   const out: Placement[] = []
   const rows = usableRows(room)
+  const cols = usableColumns(room)
   const top = Math.max(rows.from, rows.to - POOL_TABLE.height + 1)
 
   // A pool table and then a couch, over and over for as long as the room
   // lasts - which is how the games room of the hand-drawn map is arranged, and
   // stops a big lounge being nothing but pool tables.
-  let x = room.ix0 + 1
+  let x = cols.from + 1
   let wantsTable = true
-  while (x < room.ix1) {
+  while (x < cols.to) {
     const piece = wantsTable ? POOL_TABLE : COUCH
     // a couch needs a seat either side of it, so it asks for two more columns
     const needed = wantsTable ? piece.width : piece.width + 2
-    if (x + needed > room.ix1) break
+    if (x + needed > cols.to) break
 
     if (wantsTable) {
       out.push(...stamp(POOL_TABLE, x, top))
@@ -216,7 +258,7 @@ function lounge(rng: Rng, room: Room): Placement[] {
   out.push({
     layer: 'VendingMachine',
     gid: VENDING_GID,
-    tx: room.ix0 + 1,
+    tx: cols.from + 1,
     ty: rows.from,
     widthPx: 48,
     heightPx: 72,
@@ -224,7 +266,7 @@ function lounge(rng: Rng, room: Room): Placement[] {
 
   // The tables run the length of the room at the same rows a decoration would
   // want, so what is left over is whatever the loop above did not reach.
-  out.push(...dressWalls(rng, room, [room.ix0, x]))
+  out.push(...dressWalls(rng, room, [cols.from, x]))
   return out
 }
 
@@ -298,13 +340,15 @@ export function doorways(room: Room): Set<string> {
   const clear = new Set<string>()
   for (const door of room.doors) {
     clear.add(`${door.x},${door.y}`)
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      clear.add(`${door.x + dx},${door.y + dy}`)
+    clear.add(`${door.x},${door.y - 1}`)
+    clear.add(`${door.x},${door.y + 1}`)
+
+    // A door is a gap in a side wall, so coming through it means moving
+    // sideways. Two tiles of that is the difference between a way in and a
+    // gap you have to squeeze through sideways past somebody's desk.
+    for (const step of [1, 2]) {
+      clear.add(`${door.x + step},${door.y}`)
+      clear.add(`${door.x - step},${door.y}`)
     }
   }
   return clear
@@ -342,18 +386,22 @@ function desk(rng: Rng, x: number, y: number, withComputer: boolean): Placement[
     out.push(tile('ObjectsOnCollide', DESK.body[i], x + i, y + 1))
   }
 
+  // The screen stands on the desk, so it covers the desk's own two rows - its
+  // base on the front edge. A row lower and it is standing on the floor in
+  // front of the desk, which is where it used to be.
   if (withComputer) {
     out.push({
       layer: 'Computer',
       gid: rng.pick(COMPUTER_GIDS),
       tx: x,
-      ty: y + 2,
+      ty: y + 1,
       widthPx: 96,
       heightPx: 64,
     })
   }
 
-  out.push(chair('up', x + 1, y + 3))
+  // and the chair is pulled up to that front edge, not left a row adrift
+  out.push(chair('up', x + 1, y + 2))
   return out
 }
 
