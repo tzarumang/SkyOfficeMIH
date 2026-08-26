@@ -6,6 +6,7 @@ import {
   IComputer,
   IWhiteboard,
   IChatMessage,
+  IRoomba,
 } from '../../../types/IOfficeState'
 
 export class Player extends Schema implements IPlayer {
@@ -26,6 +27,18 @@ export class Computer extends Schema implements IComputer {
 export class Whiteboard extends Schema implements IWhiteboard {
   @type('string') roomId = getRoomId()
   @type({ set: 'string' }) connectedUser = new SetSchema<string>()
+}
+
+/**
+ * The cleaning robot, which belongs to the office rather than to anybody in
+ * it. Nothing a client already knows says where it is, so unlike a pet its
+ * position is replicated - the server drives it and everyone watches.
+ */
+export class Roomba extends Schema implements IRoomba {
+  @type('number') x = 0
+  @type('number') y = 0
+  /** heading in radians, so the client can point it where it is going */
+  @type('number') angle = 0
 }
 
 export class ChatMessage extends Schema implements IChatMessage {
@@ -53,6 +66,19 @@ export class OfficeState extends Schema implements IOfficeState {
 
   @type([ChatMessage])
   chatMessages = new ArraySchema<ChatMessage>()
+
+  /**
+   * Whether this office has a cleaning robot.
+   *
+   * The robot below would seem to say that on its own, but a child schema the
+   * server never sets still reaches the client as an empty instance rather
+   * than as nothing - so an office without a robot and an office whose robot
+   * has not been heard from yet look identical. This says which it is.
+   */
+  @type('boolean') hasRoomba = false
+
+  /** where that robot has got to; meaningless unless hasRoomba */
+  @type(Roomba) roomba?: Roomba
 }
 
 /**

@@ -30,6 +30,8 @@ import { OfficeSpec, parseOfficeId } from '../../types/Office'
 import { CLASSIC_SPAWN, readSpawn } from '../../types/Spawn'
 import { ItemType } from '../../types/Items'
 import RateLimiter from '../rooms/RateLimiter'
+import RoombaDriver from '../rooms/RoombaDriver'
+import { ROOMBA_TICK_MS } from '../../types/Roomba'
 import http from 'http'
 import { readFileSync } from 'fs'
 
@@ -1053,17 +1055,113 @@ async function generatedRoomTests() {
   await built.leave()
 }
 
+
+/**
+ * The steering, run against a real floor plan rather than a fixture: the one
+ * thing that must never happen is the robot ending up inside a wall, and that
+ * only means anything against walls somebody could actually walk into.
+ */
+function roombaUnits() {
+  console.log('\nThe cleaning robot')
+  const obstacles = [
+    ...classicOfficeMap.boxes(ItemType.COMPUTER),
+    ...classicOfficeMap.boxes(ItemType.WHITEBOARD),
+  ]
+  const driver = RoombaDriver.place(classicOfficeMap, obstacles)
+  check('the office has somewhere to put it', driver !== null, true)
+
+  const visited = new Set<string>()
+  let inSomething = 0
+  // ten minutes of driving, which is far longer than anyone watches it for
+  for (let tick = 0; tick < (10 * 60 * 1000) / ROOMBA_TICK_MS; tick++) {
+    const pose = driver!.advance(ROOMBA_TICK_MS)
+    if (classicOfficeMap.isSolidAt(pose.x, pose.y)) inSomething++
+    if (obstacles.some((b) => Math.abs(pose.x - b.x) <= b.halfWidth && Math.abs(pose.y - b.y) <= b.halfHeight))
+      inSomething++
+    visited.add(`${Math.floor(pose.x / 32)},${Math.floor(pose.y / 32)}`)
+  }
+
+  check('it never drives into a wall or a desk', inSomething, 0)
+  check('and it gets around the office rather than one corner', visited.size > 100, true)
+}
+
+async function roombaTests() {
+  console.log('\nOffices with a cleaning robot')
+  const client = new Client(endpoint)
+  // the same question the client asks: an office with no robot still carries
+  // an empty one in its state, so presence is read off the flag beside it
+  const robot = (room: any) => (room.state.hasRoomba ? room.state.roomba : undefined)
+
+  // the public lobby is the server's own room and is never given one
+  const lobby = await client.joinOrCreate('skyoffice', { roomba: true })
+  await sleep(300)
+  check('the lobby cannot be given a robot', robot(lobby) === undefined, true)
+  await lobby.leave()
+
+  const plain = await client.create('custom', {
+    name: 'Plain', description: 'd', password: null, unlisted: true,
+  })
+  await sleep(300)
+  check('a custom office has none unless asked for', robot(plain) === undefined, true)
+  await plain.leave()
+
+  const cleaned = await client.create('custom', {
+    name: 'Cleaned', description: 'd', password: null, unlisted: true, roomba: true,
+  })
+  await sleep(300)
+  check('asking for one puts it in the office', robot(cleaned) !== undefined, true)
+
+  const wasAt = { x: robot(cleaned).x, y: robot(cleaned).y }
+  await sleep(1500)
+  check('and it drives itself around', distance(wasAt, robot(cleaned)) > 10, true)
+  await cleaned.leave()
+
+  // it belongs to the office, so it comes back with the furniture
+  const keptSlug = slug()
+  const first = await client.create('custom', {
+    name: 'Kept', description: 'd', password: null, unlisted: true,
+    slug: keptSlug, lifetimeDays: 7, roomba: true,
+  })
+  await sleep(300)
+  check('an office that is kept can have one too', robot(first) !== undefined, true)
+  await first.leave()
+  await sleep(1200)
+
+  const reopened = await client.joinOrCreate('custom', { slug: keptSlug })
+  await sleep(300)
+  check('and reopening the link brings it back', robot(reopened) !== undefined, true)
+  await reopened.leave()
+
+  // whoever opens the link supplies the room options, so the stored record has
+  // to win here for the same reason it wins for the password
+  const bareSlug = slug()
+  const bare = await client.create('custom', {
+    name: 'Bare', description: 'd', password: null, unlisted: true,
+    slug: bareSlug, lifetimeDays: 7,
+  })
+  await sleep(300)
+  await bare.leave()
+  await sleep(1200)
+
+  const meddled = await client.joinOrCreate('custom', { slug: bareSlug, roomba: true })
+  await sleep(300)
+  check("but a visitor cannot add one to somebody else's office", robot(meddled) === undefined, true)
+  await meddled.leave()
+}
+
 async function main() {
   rateLimiterUnits()
   await whoIsAlreadyHereTests()
   spawnUnits()
   peerHostUnits()
   generatedOfficeUnits()
+  roombaUnits()
   await sleep(700)
   await matchmakingOriginTests()
   await officeLifetimeTests()
   await chatPersistenceTests()
   await petTests()
+  await roombaTests()
   await generatedRoomTests()
   await roomTests()
 

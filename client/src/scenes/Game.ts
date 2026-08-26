@@ -23,6 +23,7 @@ import { ensureAvatarTexture } from '../avatars/spriteFactory'
 import { isAvatar } from '../../../types/Avatar'
 import { hasPet, PET_FOLLOW_DISTANCE } from '../../../types/Pet'
 import Pet from '../characters/Pet'
+import Roomba from '../characters/Roomba'
 
 import store from '../stores'
 import { setFocused, setShowChat } from '../stores/ChatStore'
@@ -46,6 +47,7 @@ export default class Game extends Phaser.Scene {
   private itemsByType = new Map<ItemType, Map<string, Item>>()
   /** one per player who has chosen one, keyed by session id */
   private pets = new Map<string, Pet>()
+  private roomba?: Roomba
   private myPlayerId = ''
 
   constructor() {
@@ -173,6 +175,11 @@ export default class Game extends Phaser.Scene {
       undefined,
       this
     )
+
+    // An office whose creator asked for a cleaning robot has one in its state
+    // from the moment the room was made, so it is already there to be drawn.
+    const roomba = this.network.roomba
+    if (roomba) this.roomba = new Roomba(this, roomba.x, roomba.y, roomba.angle)
 
     // register network event listeners
     this.network.onPlayerJoined(this.handlePlayerJoined, this)
@@ -362,6 +369,22 @@ export default class Game extends Phaser.Scene {
     }
 
     this.updatePets(dt)
+    this.updateRoomba(dt)
+  }
+
+  /**
+   * The robot is the one thing here the server moves, so this only follows
+   * where it has got to. It is read rather than listened for: it moves every
+   * tick, so there is no update to miss and nothing to unsubscribe.
+   */
+  private updateRoomba(dt: number) {
+    if (!this.roomba) return
+
+    const state = this.network?.roomba
+    if (state) this.roomba.moveTo(state.x, state.y, state.angle)
+
+    // heard from where this player is standing
+    this.roomba.update(dt, this.myPlayer?.x ?? 0, this.myPlayer?.y ?? 0)
   }
 
   /**
