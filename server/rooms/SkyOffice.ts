@@ -2,7 +2,7 @@ import { IncomingMessage } from 'http'
 import bcrypt from 'bcrypt'
 import { Room, Client, ServerError } from 'colyseus'
 import { Dispatcher } from '@colyseus/command'
-import { Player, OfficeState, Computer, Whiteboard } from './schema/OfficeState'
+import { Player, OfficeState, Computer, Whiteboard, ChatMessage } from './schema/OfficeState'
 import { Message } from '../../types/Messages'
 import { IRoomData, RoomType } from '../../types/Rooms'
 import RateLimiter from './RateLimiter'
@@ -102,6 +102,8 @@ export class SkyOffice extends Room<OfficeState> {
     // The client draws whichever office this is, so it has to be told which
     // one before its game scene starts.
     this.state.mapId = settings.officeId ?? ''
+
+    this.restoreChat()
 
     // items come from the same Tiled map the client renders, so the ids on both
     // sides always line up
@@ -246,6 +248,7 @@ export class SkyOffice extends Room<OfficeState> {
 
       // update the message array (so that players join later can also see the message)
       this.dispatcher.dispatch(new ChatMessageUpdateCommand(), { client, content })
+      this.rememberChat()
 
       // broadcast to all currently connected clients except the sender (to render in-game dialog on top of the character)
       this.broadcast(
@@ -254,6 +257,39 @@ export class SkyOffice extends Room<OfficeState> {
         { except: client }
       )
     })
+  }
+
+  /**
+   * An office that outlives its room brings its conversation back with it.
+   * Disposable offices keep nothing, which is the whole difference between the
+   * two.
+   */
+  private restoreChat() {
+    if (!this.slug) return
+
+    const record = officeStore.get(this.slug)
+    if (!record?.chat?.length) return
+
+    for (const saved of record.chat) {
+      const message = new ChatMessage()
+      message.author = saved.author
+      message.content = saved.content
+      message.createdAt = saved.createdAt
+      this.state.chatMessages.push(message)
+    }
+  }
+
+  private rememberChat() {
+    if (!this.slug) return
+
+    officeStore.setChat(
+      this.slug,
+      [...this.state.chatMessages].map((message) => ({
+        author: message.author,
+        content: message.content,
+        createdAt: message.createdAt,
+      }))
+    )
   }
 
   /**
@@ -295,6 +331,7 @@ export class SkyOffice extends Room<OfficeState> {
       const settings = await this.settingsFromOptions(options)
       officeStore.put({
         slug,
+        chat: [],
         name: settings.name,
         description: settings.description,
         passwordHash: settings.passwordHash,
@@ -483,6 +520,12 @@ export class SkyOffice extends Room<OfficeState> {
 
   onDispose() {
     console.log('room', this.roomId, 'disposing...')
+
+    // Chat writes are coalesced, so the last thing said before everyone left
+    // could still be sitting in memory. That is exactly what someone reopening
+    // the office wants to see, so make sure it lands.
+    if (this.slug) void officeStore.flush()
+
     this.dispatcher.stop()
   }
 }

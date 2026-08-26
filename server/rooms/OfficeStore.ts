@@ -27,9 +27,27 @@ export interface OfficeRecord {
    * opened again - the walls have to be where they were left.
    */
   officeId: string | null
+  /**
+   * What was said here. An office that outlives its room should remember its
+   * conversation too - coming back to a month-old office and finding no trace
+   * of what was decided makes the office feel broken.
+   *
+   * It expires with the office and nothing else: no separate retention to
+   * reason about, and deleting the office deletes the conversation.
+   */
+  chat: PersistedMessage[]
   createdAt: number
   expiresAt: number
 }
+
+export interface PersistedMessage {
+  author: string
+  content: string
+  createdAt: number
+}
+
+/** the same cap the room keeps in memory */
+export const MAX_PERSISTED_MESSAGES = 100
 
 const STORE_PATH =
   process.env.OFFICE_STORE_PATH || path.join(process.cwd(), 'data', 'offices.json')
@@ -38,11 +56,14 @@ const STORE_PATH =
 export const SLUG_PATTERN = /^[A-Za-z0-9_-]{16,64}$/
 
 export const MAX_LIFETIME_DAYS = 90
+/** how long chat changes are allowed to sit before hitting the disk */
+const CHAT_WRITE_DELAY_MS = 2000
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export default class OfficeStore {
   private records = new Map<string, OfficeRecord>()
   private writing: Promise<void> = Promise.resolve()
+  private pendingWrite: ReturnType<typeof setTimeout> | null = null
 
   constructor(private storePath: string = STORE_PATH) {
     this.load()
@@ -80,6 +101,18 @@ export default class OfficeStore {
     return removed
   }
 
+  /**
+   * Chat is written far more often than a definition, so it is coalesced: a
+   * busy office would otherwise write the file on every message.
+   */
+  setChat(slug: string, chat: PersistedMessage[]) {
+    const record = this.records.get(slug)
+    if (!record) return
+
+    record.chat = chat.slice(-MAX_PERSISTED_MESSAGES)
+    this.persistSoon()
+  }
+
   get(slug: string, now = Date.now()) {
     const record = this.records.get(slug)
     if (!record) return null
@@ -112,6 +145,17 @@ export default class OfficeStore {
    * Writes are serialised and go via a temp file, so a crash midway leaves the
    * previous store intact rather than a half-written one.
    */
+  private persistSoon() {
+    if (this.pendingWrite) return
+
+    this.pendingWrite = setTimeout(() => {
+      this.pendingWrite = null
+      this.persist()
+    }, CHAT_WRITE_DELAY_MS)
+    // a pending write must never hold the process open on shutdown
+    this.pendingWrite.unref?.()
+  }
+
   private persist() {
     const snapshot = JSON.stringify([...this.records.values()], null, 2)
 
@@ -130,7 +174,13 @@ export default class OfficeStore {
   }
 
   /** for tests: waits for the queued write to land */
+  /** for tests and shutdown: writes anything still pending, then waits */
   flush() {
+    if (this.pendingWrite) {
+      clearTimeout(this.pendingWrite)
+      this.pendingWrite = null
+      this.persist()
+    }
     return this.writing
   }
 }
