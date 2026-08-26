@@ -50,6 +50,7 @@ export default class Network {
 
     phaserEvents.on(Event.MY_PLAYER_NAME_CHANGE, this.updatePlayerName, this)
     phaserEvents.on(Event.MY_PLAYER_AVATAR_CHANGE, this.updatePlayerAvatar, this)
+    phaserEvents.on(Event.MY_PLAYER_PET_CHANGE, this.updatePlayerPet, this)
     phaserEvents.on(Event.MY_PLAYER_TEXTURE_CHANGE, this.updatePlayer, this)
     phaserEvents.on(Event.PLAYER_DISCONNECTED, this.playerStreamDisconnect, this)
   }
@@ -410,6 +411,11 @@ export default class Network {
   // method to send the generated avatar descriptor to Colyseus server
   updatePlayerAvatar(avatar: string) {
     this.room?.send(Message.UPDATE_PLAYER_AVATAR, { avatar })
+  }
+
+  // method to send the chosen pet to Colyseus server
+  updatePlayerPet(pet: string) {
+    this.room?.send(Message.UPDATE_PLAYER_PET, { pet })
   }
 
   // method to send player name to Colyseus server

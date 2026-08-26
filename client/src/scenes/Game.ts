@@ -21,6 +21,8 @@ import { readSpawn } from '../../../types/Spawn'
 import { textureFromAnim } from '../util'
 import { ensureAvatarTexture } from '../avatars/spriteFactory'
 import { isAvatar } from '../../../types/Avatar'
+import { hasPet, PET_FOLLOW_DISTANCE } from '../../../types/Pet'
+import Pet from '../characters/Pet'
 
 import store from '../stores'
 import { setFocused, setShowChat } from '../stores/ChatStore'
@@ -42,6 +44,9 @@ export default class Game extends Phaser.Scene {
   private otherPlayers!: Phaser.Physics.Arcade.Group
   private otherPlayerMap = new Map<string, OtherPlayer>()
   private itemsByType = new Map<ItemType, Map<string, Item>>()
+  /** one per player who has chosen one, keyed by session id */
+  private pets = new Map<string, Pet>()
+  private myPlayerId = ''
 
   constructor() {
     super('game')
@@ -111,7 +116,8 @@ export default class Game extends Phaser.Scene {
     // debugDraw(groundLayer, this)
 
     const spawn = this.spawnPoint()
-    this.myPlayer = this.add.myPlayer(spawn.x, spawn.y, 'adam', this.network.mySessionId)
+    this.myPlayerId = this.network.mySessionId
+    this.myPlayer = this.add.myPlayer(spawn.x, spawn.y, 'adam', this.myPlayerId)
     this.playerSelector = new PlayerSelector(this, 0, 0, 16, 16)
 
     // Items come out of the Tiled map one group per kind. ITEM_SPECS says
@@ -279,6 +285,8 @@ export default class Game extends Phaser.Scene {
     // over everyone already here. Whichever arrives second is not a new person.
     if (this.otherPlayerMap.has(id)) return
 
+    this.setPetFor(id, newPlayer.pet, newPlayer.x, newPlayer.y)
+
     // Avatars are generated, so the texture may not exist on this client yet.
     // It is deterministic from the descriptor, so everyone builds the same one.
     const texture = isAvatar(newPlayer.avatar)
@@ -291,6 +299,9 @@ export default class Game extends Phaser.Scene {
 
   // function to remove the player who left from the otherPlayer group
   private handlePlayerLeft(id: string) {
+    this.pets.get(id)?.destroy()
+    this.pets.delete(id)
+
     if (this.otherPlayerMap.has(id)) {
       const otherPlayer = this.otherPlayerMap.get(id)
       if (!otherPlayer) return
@@ -309,6 +320,12 @@ export default class Game extends Phaser.Scene {
 
   // function to update target position upon receiving player updates
   private handlePlayerUpdated(field: string, value: number | string, id: string) {
+    if (field === 'pet' && typeof value === 'string') {
+      const owner = id === this.myPlayerId ? this.myPlayer : this.otherPlayerMap.get(id)
+      this.setPetFor(id, value, owner?.x ?? 0, owner?.y ?? 0)
+      return
+    }
+
     // someone regenerating their avatar mid-session needs the new sheet built
     if (field === 'avatar' && typeof value === 'string' && isAvatar(value)) {
       const texture = ensureAvatarTexture(this, value)
@@ -343,5 +360,43 @@ export default class Game extends Phaser.Scene {
       this.playerSelector.update(this.myPlayer, this.cursors)
       this.myPlayer.update(this.playerSelector, this.cursors, this.keyE, this.keyR, this.network)
     }
+
+    this.updatePets(dt)
+  }
+
+  /**
+   * Pets are drawn from their owner's replicated position, so every client
+   * arrives at the same place for them without anything being sent about the
+   * pet itself.
+   */
+  private updatePets(dt: number) {
+    this.pets.forEach((pet, id) => {
+      const owner = id === this.myPlayerId ? this.myPlayer : this.otherPlayerMap.get(id)
+      if (!owner) {
+        pet.destroy()
+        this.pets.delete(id)
+        return
+      }
+      pet.follow(owner.x, owner.y, dt)
+    })
+  }
+
+  /** gives a player the pet they chose, takes it away, or swaps it */
+  setPetFor(id: string, descriptor: string, x: number, y: number) {
+    if (!hasPet(descriptor)) {
+      this.pets.get(id)?.destroy()
+      this.pets.delete(id)
+      return
+    }
+
+    const existing = this.pets.get(id)
+    if (existing) {
+      existing.setPet(descriptor)
+      return
+    }
+
+    // start it behind its owner rather than on top of them, or it sits over
+    // their chest until somebody walks
+    this.pets.set(id, new Pet(this, x, y + PET_FOLLOW_DISTANCE, descriptor))
   }
 }

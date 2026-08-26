@@ -244,6 +244,38 @@ async function officeLifetimeTests() {
   check('a malformed slug is refused', malformed, false)
 }
 
+async function petTests() {
+  console.log('\nPets')
+  const client = new Client(endpoint)
+  const room = await client.joinOrCreate('skyoffice')
+  await sleep(300)
+  const me = () => (room.state as any).players.get(room.sessionId)
+
+  check('nobody starts with a pet', me().pet, '')
+
+  room.send(Message.UPDATE_PLAYER_PET, { pet: 'c04b1e0' })
+  await sleep(300)
+  check('a valid pet is accepted', me().pet, 'c04b1e0')
+
+  room.send(Message.UPDATE_PLAYER_PET, { pet: 'zzzzzz' })
+  await sleep(300)
+  check('a made-up pet is refused', me().pet, 'c04b1e0')
+
+  room.send(Message.UPDATE_PLAYER_PET, { pet: 'd' })
+  await sleep(300)
+  check('a malformed descriptor is refused', me().pet, 'c04b1e0')
+
+  room.send(Message.UPDATE_PLAYER_PET, { pet: { evil: true } })
+  await sleep(300)
+  check('a non-string is refused', me().pet, 'c04b1e0')
+
+  room.send(Message.UPDATE_PLAYER_PET, { pet: '' })
+  await sleep(300)
+  check('and it can be given up again', me().pet, '')
+
+  await room.leave()
+}
+
 async function chatPersistenceTests() {
   console.log('\nChat that outlives the office')
   const client = new Client(endpoint)
@@ -1031,6 +1063,7 @@ async function main() {
   await matchmakingOriginTests()
   await officeLifetimeTests()
   await chatPersistenceTests()
+  await petTests()
   await generatedRoomTests()
   await roomTests()
 
