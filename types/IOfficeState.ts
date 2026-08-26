@@ -6,6 +6,7 @@ export interface IPlayer extends Schema {
   y: number
   anim: string
   avatar: string
+  pet: string
   readyToConnect: boolean
   videoConnected: boolean
 }

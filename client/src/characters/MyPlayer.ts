@@ -7,6 +7,7 @@ import Network from '../services/Network'
 import Chair from '../items/Chair'
 
 import { phaserEvents, Event } from '../events/EventCenter'
+import type Game from '../scenes/Game'
 import { ensureAvatarTexture } from '../avatars/spriteFactory'
 import store from '../stores'
 import { pushPlayerJoinedMessage } from '../stores/ChatStore'
@@ -40,6 +41,16 @@ export default class MyPlayer extends Player {
     this.playerTexture = texture
     this.anims.play(`${this.playerTexture}_idle_down`, true)
     phaserEvents.emit(Event.MY_PLAYER_TEXTURE_CHANGE, this.x, this.y, this.currentAnimKey)
+  }
+
+  /**
+   * The pet follows on every client from this alone; nothing else is sent.
+   * Our own copy is made here, because the network deliberately skips replaying
+   * our own updates back to us.
+   */
+  setPet(pet: string) {
+    ;(this.scene as Game).setPetFor(this.playerId, pet, this.x, this.y)
+    phaserEvents.emit(Event.MY_PLAYER_PET_CHANGE, pet)
   }
 
   /** builds the generated sheet, then tells everyone which one to build */

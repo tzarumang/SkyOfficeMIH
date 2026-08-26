@@ -11,6 +11,7 @@ export enum Event {
   MY_PLAYER_NAME_CHANGE = 'my-player-name-change',
   MY_PLAYER_TEXTURE_CHANGE = 'my-player-texture-change',
   MY_PLAYER_AVATAR_CHANGE = 'my-player-avatar-change',
+  MY_PLAYER_PET_CHANGE = 'my-player-pet-change',
   MY_PLAYER_VIDEO_CONNECTED = 'my-player-video-connected',
   ITEM_USER_ADDED = 'item-user-added',
   ITEM_USER_REMOVED = 'item-user-removed',

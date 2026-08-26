@@ -12,6 +12,7 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import RefreshIcon from '@mui/icons-material/Refresh'
 
 import { GENDERS, Gender, buildAvatar } from '../../../types/Avatar'
+import { PETS, PetKind, buildPet, NO_PET } from '../../../types/Pet'
 import { Portrait } from '../avatars/Portrait'
 import { useAppSelector, useAppDispatch } from '../hooks'
 import { setLoggedIn } from '../stores/UserStore'
@@ -119,6 +120,7 @@ const newSeed = () => Math.floor(Math.random() * 0xffffff)
 export default function LoginDialog() {
   const [name, setName] = useState<string>('')
   const [gender, setGender] = useState<Gender>('n')
+  const [petKind, setPetKind] = useState<PetKind | null>(null)
   const [seed, setSeed] = useState<number>(newSeed)
   const avatar = buildAvatar(gender, seed)
   const [nameFieldEmpty, setNameFieldEmpty] = useState<boolean>(false)
@@ -137,6 +139,7 @@ export default function LoginDialog() {
       game.registerKeys()
       game.myPlayer.setPlayerName(name)
       game.myPlayer.setAvatar(avatar)
+      game.myPlayer.setPet(petKind ? buildPet(petKind, seed) : NO_PET)
       game.network.readyToConnect()
       dispatch(setLoggedIn(true))
     }
@@ -178,6 +181,21 @@ export default function LoginDialog() {
             onChange={(_event, value) => value && setGender(value)}
           >
             {GENDERS.map((option) => (
+              <ToggleButton key={option.value} value={option.value}>
+                {option.label}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+
+          <SubTitle>Bring a pet</SubTitle>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            color="secondary"
+            value={petKind}
+            onChange={(_event, value) => setPetKind(value)}
+          >
+            {PETS.map((option) => (
               <ToggleButton key={option.value} value={option.value}>
                 {option.label}
               </ToggleButton>

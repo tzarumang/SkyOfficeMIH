@@ -22,6 +22,7 @@ import {
 } from './commands/WhiteboardUpdateArrayCommand'
 import ChatMessageUpdateCommand from './commands/ChatMessageUpdateCommand'
 import { isAvatar } from '../../types/Avatar'
+import { isPet } from '../../types/Pet'
 import OfficeStore, { SLUG_PATTERN } from './OfficeStore'
 
 /** one store for the process; offices outlive the rooms that run them */
@@ -214,6 +215,15 @@ export class SkyOffice extends Room<OfficeState> {
 
       const player = this.state.players.get(client.sessionId)
       if (player) player.avatar = message.avatar
+    })
+
+    // A pet follows its owner on every client from this descriptor alone, so
+    // nothing about it is simulated or broadcast beyond the choice itself.
+    this.onSafeMessage(Message.UPDATE_PLAYER_PET, (client, message: { pet: string }) => {
+      if (!isPet(message?.pet)) return
+
+      const player = this.state.players.get(client.sessionId)
+      if (player) player.pet = message.pet
     })
 
     // when a player is ready to connect, call the PlayerReadyToConnectCommand
