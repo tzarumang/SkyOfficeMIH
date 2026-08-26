@@ -57,6 +57,25 @@ export const WALLS = {
   bottomRight: 213,
 }
 
+/**
+ * How a vertical wall starts and stops.
+ *
+ * Every vertical wall in the tileset is a strip of three: a cap, the body that
+ * repeats down the middle, and a second cap. Only the body was ever drawn here,
+ * which is fine while a wall runs from one side of the building to the other -
+ * and wrong the moment a doorway breaks it, because the wall then simply stops
+ * in mid-air. That is what made the way into a generated room hard to pick out:
+ * the hand-drawn map caps its walls at every opening, and these are the tiles
+ * it uses to do it.
+ */
+export const WALL_ENDS: Record<number, { top: number; bottom: number }> = {
+  // the strips sit one above the other in the tileset, so each cap is the tile
+  // directly above or below the body it belongs to
+  [WALLS.leftEdge]: { top: 88, bottom: WALLS.bottomLeft },
+  [WALLS.rightEdge]: { top: 90, bottom: 218 },
+  [WALLS.shared]: { top: 28, bottom: 156 },
+}
+
 export const CHAIRS = { down: 2562, left: 2563, right: 2564, up: 2566 }
 export type ChairDirection = keyof typeof CHAIRS
 

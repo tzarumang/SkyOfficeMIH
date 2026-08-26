@@ -11,7 +11,7 @@ import {
   styleKeyOf,
 } from './layout'
 import { Placement } from './furnish'
-import { STYLES, TILE, WALLS } from './vocabulary'
+import { STYLES, TILE, WALL_ENDS, WALLS } from './vocabulary'
 
 /**
  * Turns a floor plan and a pile of furniture into a Tiled map, in the format
@@ -216,8 +216,18 @@ function wallGid(layout: Layout, x: number, y: number): number {
   const runsVertically = isWall(layout, x, y - 1) || isWall(layout, x, y + 1)
 
   if (runsVertically && (floorLeft || floorRight)) {
-    if (floorLeft && floorRight) return WALLS.shared
-    return floorRight ? WALLS.leftEdge : WALLS.rightEdge
+    const body =
+      floorLeft && floorRight ? WALLS.shared : floorRight ? WALLS.leftEdge : WALLS.rightEdge
+
+    // Where a doorway is punched through it, the run ends here. Capping it is
+    // the difference between a wall with a way through and a wall that stops
+    // in mid-air - only against floor, so the outside of the building, which
+    // ends against nothing at all, is left as it was.
+    const ends = WALL_ENDS[body]
+    if (isFloor(layout, x, y - 1)) return ends.top
+    if (isFloor(layout, x, y + 1)) return ends.bottom
+
+    return body
   }
 
   if (isFloor(layout, x, y + 1)) return styleOf(layout, x, y + 1).wallRows[0]
