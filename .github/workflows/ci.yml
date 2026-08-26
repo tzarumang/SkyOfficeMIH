@@ -1,8 +1,11 @@
 name: CI
 
+# The baseline every branch has to pass. saas-main carries additional checks of
+# its own - see saas.yml. Pull requests are unfiltered, so a PR into either
+# branch already runs this; the list below is only about direct pushes.
 on:
   push:
-    branches: [master]
+    branches: [master, saas-main]
   pull_request:
 
 jobs:
