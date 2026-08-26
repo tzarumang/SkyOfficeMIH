@@ -121,7 +121,7 @@ reachable from wherever people open the app. Container names will not work.
 | `ALLOWED_ORIGINS` | Comma-separated origins allowed to reach the matchmaking API, e.g. `https://office.example.com`. Unset means any origin is accepted. |
 | `COLYSEUS_MONITOR_USER` / `COLYSEUS_MONITOR_PASSWORD` | Credentials for the `/colyseus` dashboard, which reads every room's state and can disconnect clients. **It is not mounted at all unless both are set.** |
 | `CLIENT_PORT` / `SERVER_PORT` / `PEER_PUBLIC_PORT` | Host ports to publish on. |
-| `OFFICE_STORE_PATH` | Where offices with a lifetime are recorded. Defaults to `/app/data/offices.json` in the image, backed by the `office-data` volume. Losing this file closes every office that had a lifetime. |
+| `OFFICE_STORE_PATH` | Where offices with a lifetime are recorded, **including their chat**. Defaults to `/app/data/offices.json` in the image, backed by the `office-data` volume. Losing this file closes every office that had a lifetime and loses its conversation. |
 | `BIND_ADDRESS` | Interface those ports bind to. Defaults to `127.0.0.1`, so only the host can reach them - which is what you want when a tunnel or reverse proxy on that host forwards them. Use `0.0.0.0` to expose them to your network. |
 
 `.env.example` has worked examples for both a reverse-proxied setup and a bare
@@ -143,12 +143,21 @@ the office gets a stable link that keeps working for that long.
 
 The room is still disposed once empty either way - an empty office should not
 cost a running process. What survives is the office *definition*, recorded in
-`OFFICE_STORE_PATH`: name, description, whether it is unlisted, and the
-password hash. Reopening the link recreates the room from that record, which is
-also what stops a visitor recreating a private office without its password.
+`OFFICE_STORE_PATH`: name, description, whether it is unlisted, the password
+hash, and the conversation. Reopening the link recreates the room from that
+record, which is also what stops a visitor recreating a private office without
+its password.
 
-Chat history does not survive an office emptying. The room is genuinely gone;
-only the definition is kept.
+Chat lives exactly as long as the office does. The last 100 messages are kept
+beside the definition and come back when the link is reopened; when the office
+expires, its conversation is pruned with it. A disposable office keeps nothing -
+that is the difference between the two.
+
+Two things follow from chat being on disk. The file now holds real conversation,
+so it wants the same care as anything else with people's words in it - and the
+`/colyseus` dashboard, which reads full room state, can read it back. And
+messages are attributed to whatever display name someone typed, which nothing
+verifies; history is a convenience, not a record.
 
 ### Health checks
 

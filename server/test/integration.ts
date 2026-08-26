@@ -244,6 +244,68 @@ async function officeLifetimeTests() {
   check('a malformed slug is refused', malformed, false)
 }
 
+async function chatPersistenceTests() {
+  console.log('\nChat that outlives the office')
+  const client = new Client(endpoint)
+  const messagesIn = (room: any) => [...room.state.chatMessages].map((m: any) => m.content)
+
+  const officeSlug = slug()
+  const first = await client.create('custom', {
+    name: 'Design Team', description: 'kept', password: null, unlisted: true,
+    slug: officeSlug, lifetimeDays: 7,
+  })
+  await sleep(300)
+  first.send(Message.UPDATE_PLAYER_NAME, { name: 'Ana' })
+  await sleep(200)
+  first.send(Message.ADD_CHAT_MESSAGE, { content: 'ship it on friday' })
+  await sleep(200)
+  first.send(Message.ADD_CHAT_MESSAGE, { content: 'agreed' })
+  await sleep(600)
+  check('messages land while the office is open', messagesIn(first).length, 2)
+  await first.leave()
+
+  // the room is disposed once empty; reopening rebuilds it from the record
+  await sleep(1200)
+  const reopened = await client.joinOrCreate('custom', { slug: officeSlug })
+  await sleep(500)
+  check('the conversation comes back', messagesIn(reopened), ['ship it on friday', 'agreed'])
+  const restored = [...(reopened.state as any).chatMessages][0]
+  check('and keeps who said it', restored.author, 'Ana')
+  check('and when it was said', typeof restored.createdAt === 'number' && restored.createdAt > 0, true)
+
+  reopened.send(Message.UPDATE_PLAYER_NAME, { name: 'Ben' })
+  await sleep(200)
+  reopened.send(Message.ADD_CHAT_MESSAGE, { content: 'morning' })
+  await sleep(600)
+  await reopened.leave()
+  await sleep(1200)
+
+  const third = await client.joinOrCreate('custom', { slug: officeSlug })
+  await sleep(500)
+  check('later messages are kept too', messagesIn(third).length, 3)
+  await third.leave()
+
+  // a disposable office keeps nothing - that is the whole difference
+  const throwaway = await client.create('custom', {
+    name: 'Standup', description: 'disposable', password: null, unlisted: false,
+  })
+  await sleep(300)
+  throwaway.send(Message.UPDATE_PLAYER_NAME, { name: 'Cass' })
+  await sleep(200)
+  throwaway.send(Message.ADD_CHAT_MESSAGE, { content: 'this should not be kept' })
+  await sleep(600)
+  check('a disposable office still has chat while open', messagesIn(throwaway).length, 1)
+  await throwaway.leave()
+  await sleep(1200)
+
+  const fresh = await client.create('custom', {
+    name: 'Standup', description: 'disposable', password: null, unlisted: false,
+  })
+  await sleep(400)
+  check('but a disposable office remembers nothing', messagesIn(fresh).length, 0)
+  await fresh.leave()
+}
+
 async function roomTests() {
   const client = new Client(endpoint)
 
@@ -968,6 +1030,7 @@ async function main() {
   await sleep(700)
   await matchmakingOriginTests()
   await officeLifetimeTests()
+  await chatPersistenceTests()
   await generatedRoomTests()
   await roomTests()
 
