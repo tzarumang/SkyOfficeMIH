@@ -190,7 +190,7 @@ export default function HelperButtonGroup() {
       <ButtonGroup>
         {roomJoined && (
           <>
-            <Tooltip title="Room Info">
+            <Tooltip title="Office Info">
               <StyledFab
                 size="small"
                 onClick={() => {

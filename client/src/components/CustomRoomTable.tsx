@@ -109,7 +109,7 @@ export const CustomRoomTable = () => {
           setShowPasswordError(true)
           return
         }
-        setJoinError(joinErrorMessage(error, 'Could not join that room. It may have closed.'))
+        setJoinError(joinErrorMessage(error, 'Could not join that office. It may have closed.'))
       })
   }
 
@@ -129,7 +129,7 @@ export const CustomRoomTable = () => {
   }
 
   return availableRooms.length === 0 ? (
-    <MessageText>There are no custom rooms now, create one or join the public lobby.</MessageText>
+    <MessageText>There are no custom offices now, create one or join the public lobby.</MessageText>
   ) : (
     <>
       {joinError && (
@@ -200,7 +200,7 @@ export const CustomRoomTable = () => {
       <PasswordDialog open={showPasswordDialog} onClose={resetPasswordDialog}>
         <form onSubmit={handlePasswordSubmit}>
           <DialogContent className="dialog-content">
-            <MessageText>This a private room, please enter password:</MessageText>
+            <MessageText>This is a private office, please enter its password:</MessageText>
             <TextField
               autoFocus
               fullWidth

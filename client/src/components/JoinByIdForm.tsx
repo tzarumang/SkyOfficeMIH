@@ -49,17 +49,17 @@ export const JoinByIdForm = () => {
       .then(() => bootstrap.launchGame())
       .catch((joinError) => {
         console.error(joinError)
-        setError(joinErrorMessage(joinError, 'No room with that ID, or it is no longer running.'))
+        setError(joinErrorMessage(joinError, 'No office with that ID, or it is no longer running.'))
       })
   }
 
   return (
     <Wrapper onSubmit={handleSubmit}>
-      <p className="hint">Have a room ID? Unlisted rooms can only be joined this way.</p>
+      <p className="hint">Have an office ID? Unlisted offices can only be joined this way.</p>
       <div className="fields">
         <TextField
           size="small"
-          label="Room ID"
+          label="Office ID"
           variant="outlined"
           color="secondary"
           value={roomId}

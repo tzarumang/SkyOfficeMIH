@@ -39,6 +39,8 @@ export interface IOfficeState extends Schema {
   computers: MapSchema<IComputer>
   whiteboards: MapSchema<IWhiteboard>
   chatMessages: ArraySchema<IChatMessage>
+  /** the logo hung in the hallway, or empty for an office without one */
+  logo: string
   /** whether the office has a cleaning robot at all */
   hasRoomba: boolean
   /** where that robot is; meaningless unless hasRoomba */

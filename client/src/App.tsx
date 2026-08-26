@@ -12,10 +12,17 @@ import Chat from './components/Chat'
 import HelperButtonGroup from './components/HelperButtonGroup'
 import MobileVirtualJoystick from './components/MobileVirtualJoystick'
 
+/**
+ * Every panel in here is dark, but nothing said so: text that MUI does not
+ * colour itself - a checkbox label, a plain div - fell back to the browser's
+ * black and came out at about 1.4:1 against the panel behind it. Saying it
+ * once here covers every dialog rather than each one remembering to.
+ */
 const Backdrop = styled.div`
   position: absolute;
   height: 100%;
   width: 100%;
+  color: #eee;
 `
 
 function App() {

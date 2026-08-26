@@ -24,6 +24,7 @@ import { isAvatar } from '../../../types/Avatar'
 import { hasPet, PET_FOLLOW_DISTANCE } from '../../../types/Pet'
 import Pet from '../characters/Pet'
 import Roomba from '../characters/Roomba'
+import { ensureLogoTexture } from '../logo/logoFactory'
 
 import store from '../stores'
 import { setFocused, setShowChat } from '../stores/ChatStore'
@@ -175,6 +176,8 @@ export default class Game extends Phaser.Scene {
       undefined,
       this
     )
+
+    this.hangLogo()
 
     // An office whose creator asked for a cleaning robot has one in its state
     // from the moment the room was made, so it is already there to be drawn.
@@ -370,6 +373,32 @@ export default class Game extends Phaser.Scene {
 
     this.updatePets(dt)
     this.updateRoomba(dt)
+  }
+
+  /**
+   * Hangs the office's logo on the wall the map set aside for it.
+   *
+   * The spot belongs to the map and the logo belongs to the office, so neither
+   * knows about the other until here. An office with no logo, or a map drawn
+   * before there was anywhere to put one, simply leaves the wall bare.
+   */
+  private hangLogo() {
+    const logo = this.network?.logo
+    if (!logo) return
+
+    const spot = this.map.getObjectLayer('Logo')?.objects?.[0]
+    if (!spot?.width || !spot?.height) return
+
+    const texture = ensureLogoTexture(this, logo)
+    if (!texture) return
+
+    const sign = this.add.image(spot.x! + spot.width / 2, spot.y! + spot.height / 2, texture)
+
+    // Scaled to fit the wall it was given rather than stretched to fill it, so
+    // a tall logo and a wide one both keep the shape they were drawn in.
+    const fit = Math.min(spot.width / sign.width, spot.height / sign.height)
+    sign.setScale(fit)
+    sign.setDepth(sign.y)
   }
 
   /**

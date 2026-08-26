@@ -1,5 +1,5 @@
 import { Rng } from './rng'
-import { Layout, Room, styleKeyOf } from './layout'
+import { Layout, logoColumns, Room, styleKeyOf } from './layout'
 import { OfficeSpec } from '../../types/Office'
 import {
   BOOKCASE,
@@ -377,7 +377,14 @@ function hallway(rng: Rng, room: Room): Placement[] {
     y++
   }
 
-  out.push(...dressWalls(rng, room, [room.ix1 + 1, room.ix1 + 1], { board: false, corner: false }))
+  out.push(
+    ...dressWalls(rng, room, [room.ix1 + 1, room.ix1 + 1], {
+      board: false,
+      corner: false,
+      // the wall the company logo hangs on, which is this room's end wall
+      reserved: logoColumns(room),
+    })
+  )
   return out
 }
 
@@ -668,6 +675,8 @@ interface WallOptions {
   pictures?: number
   /** whether to stand something in whichever corner is still free */
   corner?: boolean
+  /** a span of the wall that is spoken for before anything is hung on it */
+  reserved?: [number, number]
 }
 
 function dressWalls(
@@ -676,13 +685,15 @@ function dressWalls(
   taken: [number, number],
   options: WallOptions = {}
 ): Placement[] {
-  const { board = true, pictures = 3, corner = true } = options
+  const { board = true, pictures = 3, corner = true, reserved } = options
   const out: Placement[] = []
   const rows = usableRows(room)
   const clear = doorways(room)
 
-  // whatever else goes on this wall has to work around the board
+  // whatever else goes on this wall has to work around the board, and around
+  // anything the office has already claimed - the hallway logo, in a corridor
   const spoken: Array<[number, number]> = board ? [[boardColumn(room), boardColumn(room) + 1]] : []
+  if (reserved) spoken.push(reserved)
 
   // A window is let into the wall itself, across the rows the wall occupies.
   // It sits off to one side because the board is what goes in the middle.
@@ -690,7 +701,8 @@ function dressWalls(
   const windowX = room.ix0 + Math.max(1, Math.floor((room.ix1 - room.ix0) / 4) - 1)
   if (
     windowX + window.width - 1 <= room.ix1 &&
-    (!board || windowX + window.width <= boardColumn(room) - 1)
+    (!board || windowX + window.width <= boardColumn(room) - 1) &&
+    !spoken.some(([from, to]) => windowX <= to && windowX + window.width - 1 >= from)
   ) {
     out.push(...stamp(window, windowX, room.y0))
     spoken.push([windowX, windowX + window.width - 1])

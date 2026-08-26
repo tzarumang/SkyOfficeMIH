@@ -53,7 +53,7 @@ export function ShareLinkPanel({ roomId, slug }: { roomId: string; slug: string 
         <span className="copied">Copied</span>
       ) : (
         <Tooltip title="Copy link">
-          <IconButton size="small" onClick={copy} aria-label="copy room link">
+          <IconButton size="small" onClick={copy} aria-label="copy office link">
             <ContentCopyIcon fontSize="small" />
           </IconButton>
         </Tooltip>

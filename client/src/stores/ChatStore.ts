@@ -22,6 +22,12 @@ export enum MessageType {
   REGULAR_MESSAGE,
 }
 
+export interface Arrival {
+  name: string
+  /** what to call where they arrived: the office by name, or the lobby */
+  place: string
+}
+
 export const chatSlice = createSlice({
   name: 'chat',
   initialState: {
@@ -37,24 +43,30 @@ export const chatSlice = createSlice({
       })
       trim(state.chatMessages)
     },
-    pushPlayerJoinedMessage: (state, action: PayloadAction<string>) => {
+    /**
+     * Who came and went, and from where. An office has a name its people chose,
+     * and saying "joined the lobby" inside it reads as though they walked into
+     * somewhere else entirely - so the place says its own name, and only the
+     * public lobby is "the lobby".
+     */
+    pushPlayerJoinedMessage: (state, action: PayloadAction<Arrival>) => {
       state.chatMessages.push({
         messageType: MessageType.PLAYER_JOINED,
         chatMessage: {
           createdAt: new Date().getTime(),
-          author: action.payload,
-          content: 'joined the lobby',
+          author: action.payload.name,
+          content: `joined ${action.payload.place}`,
         } as IChatMessage,
       })
       trim(state.chatMessages)
     },
-    pushPlayerLeftMessage: (state, action: PayloadAction<string>) => {
+    pushPlayerLeftMessage: (state, action: PayloadAction<Arrival>) => {
       state.chatMessages.push({
         messageType: MessageType.PLAYER_LEFT,
         chatMessage: {
           createdAt: new Date().getTime(),
-          author: action.payload,
-          content: 'left the lobby',
+          author: action.payload.name,
+          content: `left ${action.payload.place}`,
         } as IChatMessage,
       })
       trim(state.chatMessages)

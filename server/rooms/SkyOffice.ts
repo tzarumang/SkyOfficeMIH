@@ -25,6 +25,7 @@ import {
 import ChatMessageUpdateCommand from './commands/ChatMessageUpdateCommand'
 import { isAvatar } from '../../types/Avatar'
 import { isPet } from '../../types/Pet'
+import { isLogo, NO_LOGO } from '../../types/Logo'
 import OfficeStore, { SLUG_PATTERN } from './OfficeStore'
 
 /** one store for the process; offices outlive the rooms that run them */
@@ -105,6 +106,9 @@ export class SkyOffice extends Room<OfficeState> {
     // The client draws whichever office this is, so it has to be told which
     // one before its game scene starts.
     this.state.mapId = settings.officeId ?? ''
+
+    // hung in the hallway by whoever made the office
+    this.state.logo = settings.logo
 
     this.restoreChat()
 
@@ -362,6 +366,7 @@ export class SkyOffice extends Room<OfficeState> {
           description: existing.description,
           passwordHash: existing.passwordHash,
           unlisted: existing.unlisted,
+          logo: isLogo(existing.logo) ? existing.logo : NO_LOGO,
           roomba: Boolean(existing.roomba),
           officeId: readOfficeId(existing.officeId),
         }
@@ -383,6 +388,7 @@ export class SkyOffice extends Room<OfficeState> {
         description: settings.description,
         passwordHash: settings.passwordHash,
         unlisted: settings.unlisted,
+        logo: settings.logo,
         roomba: settings.roomba,
         officeId: settings.officeId,
         createdAt: Date.now(),
@@ -419,6 +425,12 @@ export class SkyOffice extends Room<OfficeState> {
       // public lobby is the server's own room, and nobody joining it gets to
       // add furniture to it.
       roomba: this.roomName !== RoomType.PUBLIC && Boolean(options?.roomba),
+      // Checked rather than trusted: this is drawn on every client in the room,
+      // so anything that is not a logo is no logo at all.
+      logo:
+        this.roomName !== RoomType.PUBLIC && isLogo(options?.logo)
+          ? String(options?.logo ?? NO_LOGO)
+          : NO_LOGO,
       officeId: generated ? newOfficeId(clampOfficeSpec(options?.office)) : null,
     }
   }

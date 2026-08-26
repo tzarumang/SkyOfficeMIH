@@ -65,6 +65,21 @@ export interface Layout {
   deskSlots: Array<{ x: number; y: number; facing: 'up' | 'down' }>
 }
 
+/** how much of the corridor's end wall a company logo is given, in tiles */
+export const LOGO_TILES = { width: 3, height: 2 }
+
+/**
+ * The columns that wall gives up to the logo.
+ *
+ * Both the painter, which marks the spot, and the furnisher, which hangs the
+ * pictures, have to agree on it - the first office drawn with a logo had a
+ * window let into the wall straight through the middle of it.
+ */
+export function logoColumns(corridor: Room): [number, number] {
+  const left = Math.floor((corridor.ix0 + corridor.ix1 + 1 - LOGO_TILES.width) / 2)
+  return [left, left + LOGO_TILES.width - 1]
+}
+
 export interface LayoutOptions {
   spec: OfficeSpec
 }

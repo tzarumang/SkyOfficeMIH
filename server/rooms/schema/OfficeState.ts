@@ -68,6 +68,13 @@ export class OfficeState extends Schema implements IOfficeState {
   chatMessages = new ArraySchema<ChatMessage>()
 
   /**
+   * The logo hung in the hallway, as the few colours it was reduced to, or
+   * empty for an office without one. It is small enough to sit in the state
+   * beside everything else, and every client draws it from the same string.
+   */
+  @type('string') logo = ''
+
+  /**
    * Whether this office has a cleaning robot.
    *
    * The robot below would seem to say that on its own, but a child schema the

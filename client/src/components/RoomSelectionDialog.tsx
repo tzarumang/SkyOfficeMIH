@@ -172,7 +172,7 @@ export default function RoomSelectionDialog() {
                 <IconButton className="back-button" onClick={() => setShowCreateRoomForm(false)}>
                   <ArrowBackIcon />
                 </IconButton>
-                <Title>Create Custom Room</Title>
+                <Title>Create Custom Office</Title>
               </TitleWrapper>
               <CreateRoomForm />
             </CustomRoomWrapper>
@@ -183,7 +183,7 @@ export default function RoomSelectionDialog() {
                   <ArrowBackIcon />
                 </IconButton>
                 <Title>
-                  Custom Rooms
+                  Custom Offices
                   <Tooltip
                     title="We update the results in realtime, no refresh needed!"
                     placement="top"
@@ -201,7 +201,7 @@ export default function RoomSelectionDialog() {
                 color="secondary"
                 onClick={() => setShowCreateRoomForm(true)}
               >
-                Create new room
+                Create a new office
               </Button>
             </CustomRoomWrapper>
           ) : (
@@ -217,7 +217,7 @@ export default function RoomSelectionDialog() {
                   color="secondary"
                   onClick={() => (lobbyJoined ? setShowCustomRoom(true) : setShowSnackbar(true))}
                 >
-                  Create/find custom rooms
+                  Create/find custom offices
                 </Button>
               </Content>
             </>
