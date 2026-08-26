@@ -17,11 +17,24 @@ Works in desktop browsers. Mobile browsers are not supported.
 
 ## Built with
 
-- [Phaser 3](https://github.com/photonstorm/phaser) - game engine
-- [Colyseus](https://github.com/colyseus/colyseus) - authoritative WebSocket server
-- [React](https://github.com/facebook/react) and [Redux](https://github.com/reduxjs/redux-toolkit) - the interface over the game
-- [PeerJS](https://github.com/peers/peerjs) - WebRTC for video and screen sharing
+- [Phaser](https://github.com/photonstorm/phaser) 3.90 - game engine
+- [Colyseus](https://github.com/colyseus/colyseus) 0.14 - authoritative WebSocket server
+- [React](https://github.com/facebook/react) 18 and [Redux Toolkit](https://github.com/reduxjs/redux-toolkit) - the interface over the game
+- [PeerJS](https://github.com/peers/peerjs) 1.5 - WebRTC for video and screen sharing
 - [TypeScript](https://github.com/microsoft/TypeScript) on both sides, sharing the `types/` folder
+
+### Two package trees, one Phaser
+
+The server and the client install separately - `package.json` at the root, and
+`client/package.json` - and **both** declare Phaser. That looks redundant and is
+not: `types/` is shared by the two sides, and `types/KeyboardState.ts` imports
+Phaser. Being outside `client/`, it resolves against the root `node_modules`
+rather than the client's.
+
+So the two declarations have to be kept at the same version. They drifted once,
+with the client on 3.90 and the root left at 3.55, which meant the client
+typecheck was reading two different sets of Phaser types at the same time.
+**If you upgrade Phaser, upgrade it in both.**
 
 ## What is in it
 
