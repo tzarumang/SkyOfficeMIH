@@ -1,6 +1,6 @@
 import { FLOOR, Layout, Room, WALL, cellAt, isFloor } from './layout'
 import { Placement, doorways } from './furnish'
-import { TILE, WALL_ENDS, WALLS } from './vocabulary'
+import { STYLES, TILE, WALLS } from './vocabulary'
 
 /**
  * What has to be true of every office, however the dice fell.
@@ -320,21 +320,17 @@ export function validate(
     }
 
     // The tiles that cap a horizontal wall have transparent top and bottom
-    // edges, so one standing in a vertical run is a hole with the sky showing
-    // through it. A doorway used to leave one above and below itself.
+    // edges, so one standing in the middle of a vertical run is a hole with the
+    // sky showing through it. A doorway used to leave one above and below
+    // itself.
     //
-    // The ends of a vertical wall belong here as much as its body does: they
-    // are the same strip, drawn to close it off where a doorway breaks it.
-    // Taken from the vocabulary rather than listed again, so a wall piece
-    // cannot be added there and rejected here.
-    const verticalTiles = new Set([
-      WALLS.shared,
-      WALLS.leftEdge,
-      WALLS.rightEdge,
-      ...Object.values(WALL_ENDS).flatMap((ends) => [ends.top, ends.bottom]),
-    ])
-    const tops = new Set(Object.values(WALL_ENDS).map((ends) => ends.top))
-    const bottoms = new Set(Object.values(WALL_ENDS).map((ends) => ends.bottom))
+    // The end of a run is the exception, and has to be: a wall seen end-on
+    // shows its front, so it is drawn from the same cap and face every room's
+    // top wall uses. Those are read from the styles rather than listed again,
+    // so a new room style cannot be finished one way here and another there.
+    const bodies = new Set([WALLS.shared, WALLS.leftEdge, WALLS.rightEdge])
+    const caps = new Set(Object.values(STYLES).map((style) => style.wallRows[0]))
+    const faces = new Set(Object.values(STYLES).map((style) => style.wallRows[1]))
     const wrongWay: string[] = []
     const unfinished: string[] = []
     for (let y = 0; y < layout.height; y++) {
@@ -348,16 +344,21 @@ export function validate(
         if (!runsVertically || !roomBeside) continue
 
         const gid = ground.data[at]
-        if (!verticalTiles.has(gid)) {
-          wrongWay.push(`${x},${y} is ${gid}`)
+
+        // A doorway is a hole punched in a wall, so the run stops above it. The
+        // last two rows are the wall's face and the cap over it; drawn with the
+        // body instead it stops dead, and the way into the room reads as damage
+        // rather than as a door.
+        if (isFloor(layout, x, y + 1)) {
+          if (!faces.has(gid)) unfinished.push(`${x},${y} is ${gid}, wanted a wall face`)
+          continue
+        }
+        if (isFloor(layout, x, y + 2) && cellAt(layout, x, y + 1) === WALL) {
+          if (!caps.has(gid)) unfinished.push(`${x},${y} is ${gid}, wanted a wall cap`)
           continue
         }
 
-        // A doorway is a hole punched in a wall, so the wall stops either side
-        // of it. Drawn with the body tile it stops in mid-air, and the way into
-        // the room reads as damage rather than a door.
-        if (isFloor(layout, x, y - 1) && !tops.has(gid)) unfinished.push(`${x},${y} is ${gid}`)
-        if (isFloor(layout, x, y + 1) && !bottoms.has(gid)) unfinished.push(`${x},${y} is ${gid}`)
+        if (!bodies.has(gid)) wrongWay.push(`${x},${y} is ${gid}`)
       }
     }
     if (wrongWay.length > 0) {
