@@ -4257,9 +4257,31 @@
          "visible":true,
          "x":0,
          "y":0
+        },
+        {
+         "draworder":"topdown",
+         "id":16,
+         "name":"Logo",
+         "objects":[
+                {
+                 "height":64,
+                 "id":1270,
+                 "name":"logo",
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":96,
+                 "x":512,
+                 "y":320
+                }],
+         "opacity":1,
+         "type":"objectgroup",
+         "visible":true,
+         "x":0,
+         "y":0
         }],
- "nextlayerid":16,
- "nextobjectid":1270,
+ "nextlayerid":17,
+ "nextobjectid":1271,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.7.0",

@@ -25,7 +25,7 @@ export function isOfficeMapError(error: unknown) {
 }
 
 const MAP_UNAVAILABLE =
-  'This office could not be drawn, so the room was not opened. The server may be unreachable - try again in a moment.'
+  'This office could not be drawn, so the office was not opened. The server may be unreachable - try again in a moment.'
 
 /**
  * `fallback` is what to say when the failure is an ordinary one for wherever
@@ -36,7 +36,7 @@ export function joinErrorMessage(error: unknown, fallback: string) {
   if (isOfficeMapError(error)) return MAP_UNAVAILABLE
 
   const code = (error as { code?: number } | undefined)?.code
-  if (code === 403) return 'Incorrect password for that room.'
+  if (code === 403) return 'Incorrect password for that office.'
 
   return fallback
 }

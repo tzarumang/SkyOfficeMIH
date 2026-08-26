@@ -8,6 +8,8 @@ import {
   WALL,
   cellAt,
   isFloor,
+  logoColumns,
+  LOGO_TILES,
   styleKeyOf,
 } from './layout'
 import { Placement } from './furnish'
@@ -32,6 +34,7 @@ const OBJECT_LAYERS = [
   'Basement',
   'VendingMachine',
   'Zone',
+  'Logo',
 ]
 
 export interface TiledMap {
@@ -65,6 +68,25 @@ export function paint(layout: Layout, placements: Placement[], tilesets: unknown
         : {}),
     })
   }
+
+  // Where a company logo hangs, if the office has one. The corridor's end wall
+  // is the one piece of blank wall every floor plan has and everybody walks
+  // past, which is where a sign like this belongs. Nothing is drawn here: the
+  // logo travels with the office rather than with the map, so this only marks
+  // the spot for whatever the office turns up carrying.
+  const corridor = layout.corridor
+  const [logoLeft] = logoColumns(corridor)
+  objectLayers.get('Logo')!.push({
+    height: LOGO_TILES.height * TILE,
+    id: nextObjectId++,
+    name: 'logo',
+    rotation: 0,
+    type: '',
+    visible: true,
+    width: LOGO_TILES.width * TILE,
+    x: logoLeft * TILE,
+    y: corridor.y0 * TILE,
+  })
 
   for (const room of layout.rooms) {
     objectLayers.get('Zone')!.push({

@@ -33,6 +33,11 @@ export interface IRoomData {
    * redecorate it.
    */
   roomba?: boolean
+  /**
+   * A company logo to hang in the hallway, already reduced to the few colours
+   * an office carries. Custom offices only, like the robot.
+   */
+  logo?: string
   /** draw a fresh office, or use the one that ships with the client */
   layout?: OfficeLayout
   /** how much of everything a generated office holds */

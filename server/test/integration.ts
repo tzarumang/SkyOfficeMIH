@@ -32,6 +32,7 @@ import { ItemType } from '../../types/Items'
 import RateLimiter from '../rooms/RateLimiter'
 import RoombaDriver from '../rooms/RoombaDriver'
 import { ROOMBA_TICK_MS } from '../../types/Roomba'
+import { decodeLogo, encodeLogo, isLogo, LOGO_MAX_LENGTH } from '../../types/Logo'
 import http from 'http'
 import { readFileSync } from 'fs'
 
@@ -1158,6 +1159,89 @@ async function roombaTests() {
   await meddled.leave()
 }
 
+
+/** a red diagonal on a see-through background, two pixels square */
+const A_LOGO = '02:02:ff0000:0110'
+
+function logoUnits() {
+  console.log('\nLogos')
+  const read = decodeLogo(A_LOGO)
+  check('a logo survives the round trip', read ? encodeLogo(read) : '', A_LOGO)
+  check('and keeps its shape', [read?.width, read?.height], [2, 2])
+  check('with the colours it was reduced to', read?.palette, ['#ff0000'])
+  check('and one index per pixel', read?.pixels, [0, 1, 1, 0])
+
+  check('a pixel count that does not match the size is refused', decodeLogo('02:02:ff0000:011'), null)
+  check('so is a pixel naming a colour that is not there', decodeLogo('02:02:ff0000:0120'), null)
+  check('so is a logo with no colours at all', decodeLogo('02:02::0000'), null)
+  check('so is one bigger than the limit', decodeLogo('ff:ff:ff0000:0110'), null)
+  check('so is nonsense', decodeLogo('a picture of a dog'), null)
+  check(
+    'and so is one too long to be worth reading',
+    decodeLogo('02:02:ff0000:' + '0'.repeat(LOGO_MAX_LENGTH)),
+    null
+  )
+
+  check('no logo is a perfectly good answer', isLogo(''), true)
+  check('a real one is too', isLogo(A_LOGO), true)
+  check('a broken one is not', isLogo('02:02:ff0000:011'), false)
+}
+
+async function logoTests() {
+  console.log('\nOffices with a logo')
+  const client = new Client(endpoint)
+  const logoOf = (room: any) => room.state.logo
+
+  const lobby = await client.joinOrCreate('skyoffice', { logo: A_LOGO })
+  await sleep(300)
+  check('the lobby cannot be given a logo', logoOf(lobby), '')
+  await lobby.leave()
+
+  const plain = await client.create('custom', {
+    name: 'Plain', description: 'd', password: null, unlisted: true,
+  })
+  await sleep(300)
+  check('an office has none unless one is uploaded', logoOf(plain), '')
+  await plain.leave()
+
+  const badged = await client.create('custom', {
+    name: 'Badged', description: 'd', password: null, unlisted: true, logo: A_LOGO,
+  })
+  await sleep(300)
+  check('uploading one hangs it in the office', logoOf(badged), A_LOGO)
+  await badged.leave()
+
+  // it is drawn on every client in the room, so it is checked and not trusted
+  const junk = await client.create('custom', {
+    name: 'Junk', description: 'd', password: null, unlisted: true, logo: '02:02:ff0000:011',
+  })
+  await sleep(300)
+  check('a broken logo leaves the wall bare', logoOf(junk), '')
+  await junk.leave()
+
+  const huge = await client.create('custom', {
+    name: 'Huge', description: 'd', password: null, unlisted: true, logo: 'x'.repeat(20000),
+  })
+  await sleep(300)
+  check('and so does one far too big to be a logo', logoOf(huge), '')
+  await huge.leave()
+
+  // it belongs to the office, so it is still on the wall when the link reopens
+  const keptSlug = slug()
+  const first = await client.create('custom', {
+    name: 'Kept', description: 'd', password: null, unlisted: true,
+    slug: keptSlug, lifetimeDays: 7, logo: A_LOGO,
+  })
+  await sleep(300)
+  await first.leave()
+  await sleep(1200)
+
+  const reopened = await client.joinOrCreate('custom', { slug: keptSlug })
+  await sleep(300)
+  check('reopening the link brings the logo back', logoOf(reopened), A_LOGO)
+  await reopened.leave()
+}
+
 async function main() {
   rateLimiterUnits()
   await whoIsAlreadyHereTests()
@@ -1165,12 +1249,14 @@ async function main() {
   peerHostUnits()
   generatedOfficeUnits()
   roombaUnits()
+  logoUnits()
   await sleep(700)
   await matchmakingOriginTests()
   await officeLifetimeTests()
   await chatPersistenceTests()
   await petTests()
   await roombaTests()
+  await logoTests()
   await generatedRoomTests()
   await roomTests()
 

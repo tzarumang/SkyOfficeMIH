@@ -7,6 +7,7 @@ import { ItemType } from '../../../types/Items'
 import WebRTC from '../web/WebRTC'
 import { phaserEvents, Event } from '../events/EventCenter'
 import store from '../stores'
+import { placeName } from '../placeName'
 import { setSessionId, setPlayerNameMap, removePlayerNameMap } from '../stores/UserStore'
 import {
   setLobbyJoined,
@@ -89,14 +90,25 @@ export default class Network {
 
   // method to create a custom room
   async createCustom(roomData: IRoomData) {
-    const { name, description, password, unlisted, roomba, slug, lifetimeDays, layout, office } =
-      roomData
+    const {
+      name,
+      description,
+      password,
+      unlisted,
+      roomba,
+      logo,
+      slug,
+      lifetimeDays,
+      layout,
+      office,
+    } = roomData
     this.room = await this.client.create(RoomType.CUSTOM, {
       name,
       description,
       password,
       unlisted,
       roomba,
+      logo,
       layout,
       office,
       ...(slug ? { slug, lifetimeDays } : {}),
@@ -123,6 +135,11 @@ export default class Network {
   get roomba() {
     const state = this.room?.state
     return state?.hasRoomba ? state.roomba : undefined
+  }
+
+  /** the logo this office hangs in its hallway, or empty for none */
+  get logo() {
+    return this.room?.state?.logo ?? ''
   }
 
   /** where the server draws a generated office, given its id */
@@ -208,7 +225,7 @@ export default class Network {
       phaserEvents.emit(Event.PLAYER_LEFT, key)
       this.webRTC?.deleteVideoStream(key)
       this.webRTC?.deleteOnCalledVideoStream(key)
-      store.dispatch(pushPlayerLeftMessage(player.name))
+      store.dispatch(pushPlayerLeftMessage({ name: player.name, place: placeName() }))
       store.dispatch(removePlayerNameMap(key))
     }
 
@@ -313,7 +330,9 @@ export default class Network {
   private announcePlayer(player: IPlayer, id: string, options: { arriving: boolean }) {
     phaserEvents.emit(Event.PLAYER_JOINED, player, id)
     store.dispatch(setPlayerNameMap({ id, name: player.name }))
-    if (options.arriving) store.dispatch(pushPlayerJoinedMessage(player.name))
+    if (options.arriving) {
+      store.dispatch(pushPlayerJoinedMessage({ name: player.name, place: placeName() }))
+    }
 
     /**
      * Everything else about them, as it stands right now.

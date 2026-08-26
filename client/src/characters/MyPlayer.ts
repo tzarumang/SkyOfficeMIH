@@ -11,6 +11,7 @@ import type Game from '../scenes/Game'
 import { ensureAvatarTexture } from '../avatars/spriteFactory'
 import store from '../stores'
 import { pushPlayerJoinedMessage } from '../stores/ChatStore'
+import { placeName } from '../placeName'
 import { ITEM_SPECS } from '../../../types/Items'
 import { NavKeys } from '../../../types/KeyboardState'
 import { JoystickMovement } from '../components/Joystick'
@@ -34,7 +35,7 @@ export default class MyPlayer extends Player {
   setPlayerName(name: string) {
     this.playerName.setText(name)
     phaserEvents.emit(Event.MY_PLAYER_NAME_CHANGE, name)
-    store.dispatch(pushPlayerJoinedMessage(name))
+    store.dispatch(pushPlayerJoinedMessage({ name, place: placeName() }))
   }
 
   setPlayerTexture(texture: string) {

@@ -22,6 +22,11 @@ export interface OfficeRecord {
   passwordHash: string | null
   unlisted: boolean
   /**
+   * The logo hung in its hallway. Part of the office like the furniture is, so
+   * reopening the link brings it back rather than leaving a blank wall.
+   */
+  logo: string
+  /**
    * Whether it has a cleaning robot. Part of the office rather than a passing
    * setting, so reopening the link brings the robot back with the furniture.
    */
