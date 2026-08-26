@@ -11,7 +11,7 @@ import {
   styleKeyOf,
 } from './layout'
 import { Placement } from './furnish'
-import { STYLES, TILE, WALL_ENDS, WALLS } from './vocabulary'
+import { STYLES, TILE, WALLS } from './vocabulary'
 
 /**
  * Turns a floor plan and a pile of furniture into a Tiled map, in the format
@@ -216,18 +216,21 @@ function wallGid(layout: Layout, x: number, y: number): number {
   const runsVertically = isWall(layout, x, y - 1) || isWall(layout, x, y + 1)
 
   if (runsVertically && (floorLeft || floorRight)) {
-    const body =
-      floorLeft && floorRight ? WALLS.shared : floorRight ? WALLS.leftEdge : WALLS.rightEdge
+    // A doorway punched through the wall stops the run here, and a wall seen
+    // end-on is not a bare edge: it is a cap with its front face beneath it,
+    // the same two rows every room's top wall is drawn from. Without them the
+    // wall ends in a blank block with no front to it at all, which is what made
+    // the way into a room look broken rather than open.
+    //
+    // Only against floor - the outside of the building ends against nothing at
+    // all, and is left exactly as it was.
+    if (isFloor(layout, x, y + 1)) return styleOf(layout, x, y + 1).wallRows[1]
+    if (isFloor(layout, x, y + 2) && isWall(layout, x, y + 1)) {
+      return styleOf(layout, x, y + 2).wallRows[0]
+    }
 
-    // Where a doorway is punched through it, the run ends here. Capping it is
-    // the difference between a wall with a way through and a wall that stops
-    // in mid-air - only against floor, so the outside of the building, which
-    // ends against nothing at all, is left as it was.
-    const ends = WALL_ENDS[body]
-    if (isFloor(layout, x, y - 1)) return ends.top
-    if (isFloor(layout, x, y + 1)) return ends.bottom
-
-    return body
+    if (floorLeft && floorRight) return WALLS.shared
+    return floorRight ? WALLS.leftEdge : WALLS.rightEdge
   }
 
   if (isFloor(layout, x, y + 1)) return styleOf(layout, x, y + 1).wallRows[0]
