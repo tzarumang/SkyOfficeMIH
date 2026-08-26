@@ -79,6 +79,12 @@ export interface OfficeMap {
    * cannot see is not the same as being able to use it.
    */
   hasLineOfSight(from: { x: number; y: number }, to: { x: number; y: number }): boolean
+  /**
+   * Whether a solid tile stands at this world position. Anything off the map
+   * reads as clear, the same way line of sight treats it - callers that care
+   * about the edges check the bounds themselves.
+   */
+  isSolidAt(x: number, y: number): boolean
 }
 
 export { CLASSIC_SPAWN } from '../../types/Spawn'
@@ -167,6 +173,7 @@ export function officeMapFrom(map: TiledMap, id: string | null): OfficeMap {
     bounds: { width: map.width * map.tilewidth, height: map.height * map.tileheight },
     spawn: readSpawn(map.properties),
     boxes: (itemType) => boxes.get(itemType) ?? [],
+    isSolidAt: (x, y) => blocked(Math.floor(x / map.tilewidth), Math.floor(y / map.tileheight)),
     hasLineOfSight: (from, to) => {
       const fromTile = {
         x: Math.floor(from.x / map.tilewidth),

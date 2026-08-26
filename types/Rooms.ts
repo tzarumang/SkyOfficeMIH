@@ -27,6 +27,12 @@ export interface IRoomData {
   slug?: string
   /** how long the slug keeps working; ignored without a slug */
   lifetimeDays?: number
+  /**
+   * Give the office a cleaning robot. Only ever honoured for a custom office -
+   * the public lobby is the server's own, and nobody creating a room gets to
+   * redecorate it.
+   */
+  roomba?: boolean
   /** draw a fresh office, or use the one that ships with the client */
   layout?: OfficeLayout
   /** how much of everything a generated office holds */

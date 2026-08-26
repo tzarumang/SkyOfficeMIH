@@ -2,12 +2,14 @@ import { IncomingMessage } from 'http'
 import bcrypt from 'bcrypt'
 import { Room, Client, ServerError } from 'colyseus'
 import { Dispatcher } from '@colyseus/command'
-import { Player, OfficeState, Computer, Whiteboard, ChatMessage } from './schema/OfficeState'
+import { Player, OfficeState, Computer, Whiteboard, ChatMessage, Roomba } from './schema/OfficeState'
 import { Message } from '../../types/Messages'
 import { IRoomData, RoomType } from '../../types/Rooms'
 import RateLimiter from './RateLimiter'
 import { OfficeMap, classicOfficeMap, isWithinReach, ItemBox } from './MapObjects'
 import { newOfficeId, officeMapFor, readOfficeId } from './OfficeMaps'
+import RoombaDriver from './RoombaDriver'
+import { ROOMBA_TICK_MS } from '../../types/Roomba'
 import { clampOfficeSpec } from '../../types/Office'
 import { ItemType } from '../../types/Items'
 import PlayerUpdateCommand from './commands/PlayerUpdateCommand'
@@ -115,6 +117,8 @@ export class SkyOffice extends Room<OfficeState> {
     this.whiteboardBoxes.forEach((_, index) => {
       this.state.whiteboards.set(String(index), new Whiteboard())
     })
+
+    this.startRoomba(settings.roomba)
 
     // when a player connect to a computer, add to the computer connectedUser array
     this.onSafeMessage(Message.CONNECT_TO_COMPUTER, (client, message: { computerId: string }) => {
@@ -270,6 +274,38 @@ export class SkyOffice extends Room<OfficeState> {
   }
 
   /**
+   * Sets the cleaning robot going, in the offices that have one.
+   *
+   * Everything else this server does happens in reply to a message from a
+   * client. This is the one thing that moves on its own, so the tick is
+   * created only where it is needed rather than run in every room.
+   */
+  private startRoomba(wanted: boolean) {
+    if (!wanted) return
+
+    // it drives around the furniture as well as the walls
+    const driver = RoombaDriver.place(this.office, [
+      ...this.computerBoxes,
+      ...this.whiteboardBoxes,
+    ])
+    if (!driver) return
+
+    const roomba = new Roomba()
+    roomba.x = driver.pose.x
+    roomba.y = driver.pose.y
+    roomba.angle = driver.pose.angle
+    this.state.roomba = roomba
+    this.state.hasRoomba = true
+
+    this.setSimulationInterval((delta) => {
+      const pose = driver.advance(delta)
+      roomba.x = pose.x
+      roomba.y = pose.y
+      roomba.angle = pose.angle
+    }, ROOMBA_TICK_MS)
+  }
+
+  /**
    * An office that outlives its room brings its conversation back with it.
    * Disposable offices keep nothing, which is the whole difference between the
    * two.
@@ -326,6 +362,7 @@ export class SkyOffice extends Room<OfficeState> {
           description: existing.description,
           passwordHash: existing.passwordHash,
           unlisted: existing.unlisted,
+          roomba: Boolean(existing.roomba),
           officeId: readOfficeId(existing.officeId),
         }
       }
@@ -346,6 +383,7 @@ export class SkyOffice extends Room<OfficeState> {
         description: settings.description,
         passwordHash: settings.passwordHash,
         unlisted: settings.unlisted,
+        roomba: settings.roomba,
         officeId: settings.officeId,
         createdAt: Date.now(),
         expiresAt: OfficeStore.expiryFor(lifetimeDays),
@@ -377,6 +415,10 @@ export class SkyOffice extends Room<OfficeState> {
       description,
       passwordHash,
       unlisted: Boolean(options?.unlisted),
+      // Asked for at creation and only ever granted to a custom office: the
+      // public lobby is the server's own room, and nobody joining it gets to
+      // add furniture to it.
+      roomba: this.roomName !== RoomType.PUBLIC && Boolean(options?.roomba),
       officeId: generated ? newOfficeId(clampOfficeSpec(options?.office)) : null,
     }
   }

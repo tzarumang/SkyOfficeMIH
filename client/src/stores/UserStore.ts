@@ -5,16 +5,21 @@ import { BackgroundMode } from '../../../types/BackgroundMode'
 import phaserGame from '../PhaserGame'
 import Bootstrap from '../scenes/Bootstrap'
 
-const PET_SOUND_KEY = 'skyoffice.petSounds'
+/**
+ * The setting covers everything the office makes a noise about - pets, and now
+ * the cleaning robot - but the key is the one it was first stored under, so
+ * nobody who already turned the sound off has it come back on.
+ */
+const SOUND_KEY = 'skyoffice.petSounds'
 
 /**
- * Remembered per browser, because somebody who turns the pets off wants them to
+ * Remembered per browser, because somebody who turns the sound off wants it to
  * stay off tomorrow. Reading it is wrapped: a locked-down browser can throw on
  * localStorage rather than just return nothing.
  */
-export function getInitialPetSounds() {
+export function getInitialAmbientSounds() {
   try {
-    return window.localStorage.getItem(PET_SOUND_KEY) !== 'off'
+    return window.localStorage.getItem(SOUND_KEY) !== 'off'
   } catch {
     return true
   }
@@ -34,13 +39,13 @@ export const userSlice = createSlice({
     loggedIn: false,
     playerNameMap: new Map<string, string>(),
     showJoystick: window.innerWidth < 650,
-    petSounds: getInitialPetSounds(),
+    ambientSounds: getInitialAmbientSounds(),
   },
   reducers: {
-    togglePetSounds: (state) => {
-      state.petSounds = !state.petSounds
+    toggleAmbientSounds: (state) => {
+      state.ambientSounds = !state.ambientSounds
       try {
-        window.localStorage.setItem(PET_SOUND_KEY, state.petSounds ? 'on' : 'off')
+        window.localStorage.setItem(SOUND_KEY, state.ambientSounds ? 'on' : 'off')
       } catch {
         // a browser that will not store it still honours it for this session
       }
@@ -82,7 +87,7 @@ export const {
   setPlayerNameMap,
   removePlayerNameMap,
   setShowJoystick,
-  togglePetSounds,
+  toggleAmbientSounds,
 } = userSlice.actions
 
 export default userSlice.reducer

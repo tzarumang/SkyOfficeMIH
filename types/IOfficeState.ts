@@ -26,6 +26,12 @@ export interface IChatMessage extends Schema {
   content: string
 }
 
+export interface IRoomba extends Schema {
+  x: number
+  y: number
+  angle: number
+}
+
 export interface IOfficeState extends Schema {
   /** the id the office was grown from, or empty for the hand-drawn one */
   mapId: string
@@ -33,4 +39,8 @@ export interface IOfficeState extends Schema {
   computers: MapSchema<IComputer>
   whiteboards: MapSchema<IWhiteboard>
   chatMessages: ArraySchema<IChatMessage>
+  /** whether the office has a cleaning robot at all */
+  hasRoomba: boolean
+  /** where that robot is; meaningless unless hasRoomba */
+  roomba?: IRoomba
 }

@@ -64,7 +64,7 @@ export default class Pet extends Phaser.GameObjects.Sprite {
 
     this.nextVoiceAt = now + QUIET_MS + Math.random() * EXTRA_QUIET_MS
 
-    if (!store.getState().user.petSounds) return
+    if (!store.getState().user.ambientSounds) return
 
     const distance = Math.hypot(listenerX - this.x, listenerY - this.y)
     playPetVoice(

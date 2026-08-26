@@ -22,6 +22,11 @@ export interface OfficeRecord {
   passwordHash: string | null
   unlisted: boolean
   /**
+   * Whether it has a cleaning robot. Part of the office rather than a passing
+   * setting, so reopening the link brings the robot back with the furniture.
+   */
+  roomba: boolean
+  /**
    * The id its floor plan grew from, or null for the hand-drawn office.
    * Recording it is what makes the office the same office when the link is
    * opened again - the walls have to be where they were left.

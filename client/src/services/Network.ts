@@ -89,12 +89,14 @@ export default class Network {
 
   // method to create a custom room
   async createCustom(roomData: IRoomData) {
-    const { name, description, password, unlisted, slug, lifetimeDays, layout, office } = roomData
+    const { name, description, password, unlisted, roomba, slug, lifetimeDays, layout, office } =
+      roomData
     this.room = await this.client.create(RoomType.CUSTOM, {
       name,
       description,
       password,
       unlisted,
+      roomba,
       layout,
       office,
       ...(slug ? { slug, lifetimeDays } : {}),
@@ -109,6 +111,18 @@ export default class Network {
   async joinOfficeBySlug(slug: string, password: string | null) {
     this.room = await this.client.joinOrCreate(RoomType.CUSTOM, { slug, password })
     this.initialize()
+  }
+
+  /**
+   * The office's cleaning robot, or nothing in an office without one. The
+   * server sets it before anybody can join, so it is already there by the time
+   * the game scene starts - and it is read straight off the state each frame
+   * rather than through a listener, because a moving thing is wanted every
+   * frame anyway.
+   */
+  get roomba() {
+    const state = this.room?.state
+    return state?.hasRoomba ? state.roomba : undefined
   }
 
   /** where the server draws a generated office, given its id */

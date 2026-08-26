@@ -62,6 +62,7 @@ export const CreateRoomForm = () => {
     description: '',
     password: null,
     unlisted: false,
+    roomba: false,
   })
   // 0 means the office closes when everyone leaves and its link dies with it
   const [lifetimeDays, setLifetimeDays] = useState(0)
@@ -224,6 +225,17 @@ export const CreateRoomForm = () => {
           />
         }
         label="Unlisted - only people with the room ID can find it"
+      />
+
+      <FormControlLabel
+        control={
+          <Checkbox
+            color="secondary"
+            checked={values.roomba}
+            onChange={(event) => setValues({ ...values, roomba: event.target.checked })}
+          />
+        }
+        label="Cleaning robot - a little vacuum trundles around the office"
       />
 
       {error && (

@@ -15,11 +15,11 @@ import GitHubIcon from '@mui/icons-material/GitHub'
 import TwitterIcon from '@mui/icons-material/Twitter'
 import VideogameAssetIcon from '@mui/icons-material/VideogameAsset'
 import VideogameAssetOffIcon from '@mui/icons-material/VideogameAssetOff'
-import PetsIcon from '@mui/icons-material/Pets'
 import VolumeOffIcon from '@mui/icons-material/VolumeOff'
+import VolumeUpIcon from '@mui/icons-material/VolumeUp'
 
 import { BackgroundMode } from '../../../types/BackgroundMode'
-import { setShowJoystick, toggleBackgroundMode, togglePetSounds } from '../stores/UserStore'
+import { setShowJoystick, toggleBackgroundMode, toggleAmbientSounds } from '../stores/UserStore'
 import { useAppSelector, useAppDispatch } from '../hooks'
 import { getAvatarString, getColorByString } from '../util'
 import { ShareLinkPanel } from './ShareLinkPanel'
@@ -112,7 +112,7 @@ export default function HelperButtonGroup() {
   const [showControlGuide, setShowControlGuide] = useState(false)
   const [showRoomInfo, setShowRoomInfo] = useState(false)
   const showJoystick = useAppSelector((state) => state.user.showJoystick)
-  const petSounds = useAppSelector((state) => state.user.petSounds)
+  const ambientSounds = useAppSelector((state) => state.user.ambientSounds)
   const backgroundMode = useAppSelector((state) => state.user.backgroundMode)
   const roomJoined = useAppSelector((state) => state.room.roomJoined)
   const roomId = useAppSelector((state) => state.room.roomId)
@@ -228,9 +228,9 @@ export default function HelperButtonGroup() {
             <TwitterIcon />
           </StyledFab>
         </Tooltip>
-        <Tooltip title={petSounds ? 'Mute pets' : 'Unmute pets'}>
-          <StyledFab size="small" onClick={() => dispatch(togglePetSounds())}>
-            {petSounds ? <PetsIcon /> : <VolumeOffIcon />}
+        <Tooltip title={ambientSounds ? 'Mute office sounds' : 'Unmute office sounds'}>
+          <StyledFab size="small" onClick={() => dispatch(toggleAmbientSounds())}>
+            {ambientSounds ? <VolumeUpIcon /> : <VolumeOffIcon />}
           </StyledFab>
         </Tooltip>
         <Tooltip title="Switch Background Theme">
