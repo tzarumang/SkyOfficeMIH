@@ -370,6 +370,7 @@ export default class Game extends Phaser.Scene {
    * pet itself.
    */
   private updatePets(dt: number) {
+    const now = this.time.now
     this.pets.forEach((pet, id) => {
       const owner = id === this.myPlayerId ? this.myPlayer : this.otherPlayerMap.get(id)
       if (!owner) {
@@ -378,6 +379,8 @@ export default class Game extends Phaser.Scene {
         return
       }
       pet.follow(owner.x, owner.y, dt)
+      // heard from where this player is standing, not from where the pet is
+      if (this.myPlayer) pet.maybeSpeak(this.myPlayer.x, this.myPlayer.y, now)
     })
   }
 

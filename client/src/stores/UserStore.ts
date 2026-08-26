@@ -5,6 +5,21 @@ import { BackgroundMode } from '../../../types/BackgroundMode'
 import phaserGame from '../PhaserGame'
 import Bootstrap from '../scenes/Bootstrap'
 
+const PET_SOUND_KEY = 'skyoffice.petSounds'
+
+/**
+ * Remembered per browser, because somebody who turns the pets off wants them to
+ * stay off tomorrow. Reading it is wrapped: a locked-down browser can throw on
+ * localStorage rather than just return nothing.
+ */
+export function getInitialPetSounds() {
+  try {
+    return window.localStorage.getItem(PET_SOUND_KEY) !== 'off'
+  } catch {
+    return true
+  }
+}
+
 export function getInitialBackgroundMode() {
   const currentHour = new Date().getHours()
   return currentHour > 6 && currentHour <= 18 ? BackgroundMode.DAY : BackgroundMode.NIGHT
@@ -19,8 +34,17 @@ export const userSlice = createSlice({
     loggedIn: false,
     playerNameMap: new Map<string, string>(),
     showJoystick: window.innerWidth < 650,
+    petSounds: getInitialPetSounds(),
   },
   reducers: {
+    togglePetSounds: (state) => {
+      state.petSounds = !state.petSounds
+      try {
+        window.localStorage.setItem(PET_SOUND_KEY, state.petSounds ? 'on' : 'off')
+      } catch {
+        // a browser that will not store it still honours it for this session
+      }
+    },
     toggleBackgroundMode: (state) => {
       const newMode =
         state.backgroundMode === BackgroundMode.DAY ? BackgroundMode.NIGHT : BackgroundMode.DAY
@@ -58,6 +82,7 @@ export const {
   setPlayerNameMap,
   removePlayerNameMap,
   setShowJoystick,
+  togglePetSounds,
 } = userSlice.actions
 
 export default userSlice.reducer
