@@ -325,11 +325,10 @@ export function validate(
     // itself.
     //
     // The end of a run is the exception, and has to be: a wall seen end-on
-    // shows its front, so it is drawn from the same cap and face every room's
-    // top wall uses. Those are read from the styles rather than listed again,
-    // so a new room style cannot be finished one way here and another there.
+    // shows its front, so it is drawn with the room's own wall face. Those are
+    // read from the styles rather than listed again, so a new room style cannot
+    // be finished one way here and another there.
     const bodies = new Set([WALLS.shared, WALLS.leftEdge, WALLS.rightEdge])
-    const caps = new Set(Object.values(STYLES).map((style) => style.wallRows[0]))
     const faces = new Set(Object.values(STYLES).map((style) => style.wallRows[1]))
     const wrongWay: string[] = []
     const unfinished: string[] = []
@@ -345,16 +344,11 @@ export function validate(
 
         const gid = ground.data[at]
 
-        // A doorway is a hole punched in a wall, so the run stops above it. The
-        // last two rows are the wall's face and the cap over it; drawn with the
-        // body instead it stops dead, and the way into the room reads as damage
-        // rather than as a door.
+        // A doorway is a hole punched in a wall, so the run stops above it, and
+        // that last row is the wall's face. Drawn with the body instead it stops
+        // dead, and the way into the room reads as damage rather than a door.
         if (isFloor(layout, x, y + 1)) {
           if (!faces.has(gid)) unfinished.push(`${x},${y} is ${gid}, wanted a wall face`)
-          continue
-        }
-        if (isFloor(layout, x, y + 2) && cellAt(layout, x, y + 1) === WALL) {
-          if (!caps.has(gid)) unfinished.push(`${x},${y} is ${gid}, wanted a wall cap`)
           continue
         }
 
