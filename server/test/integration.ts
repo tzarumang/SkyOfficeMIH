@@ -253,21 +253,30 @@ async function petTests() {
 
   check('nobody starts with a pet', me().pet, '')
 
-  room.send(Message.UPDATE_PLAYER_PET, { pet: 'c04b1e0' })
+  room.send(Message.UPDATE_PLAYER_PET, { pet: 'c304b1e0' })
   await sleep(300)
-  check('a valid pet is accepted', me().pet, 'c04b1e0')
+  check('a valid pet is accepted', me().pet, 'c304b1e0')
 
   room.send(Message.UPDATE_PLAYER_PET, { pet: 'zzzzzz' })
   await sleep(300)
-  check('a made-up pet is refused', me().pet, 'c04b1e0')
+  check('a made-up pet is refused', me().pet, 'c304b1e0')
 
   room.send(Message.UPDATE_PLAYER_PET, { pet: 'd' })
   await sleep(300)
-  check('a malformed descriptor is refused', me().pet, 'c04b1e0')
+  check('a malformed descriptor is refused', me().pet, 'c304b1e0')
+
+  // the shape before coats were added should no longer be accepted
+  room.send(Message.UPDATE_PLAYER_PET, { pet: 'c04b1e0' })
+  await sleep(300)
+  check('a descriptor without a coat is refused', me().pet, 'c304b1e0')
+
+  room.send(Message.UPDATE_PLAYER_PET, { pet: 'd704b1e0' })
+  await sleep(300)
+  check('another coat is accepted', me().pet, 'd704b1e0')
 
   room.send(Message.UPDATE_PLAYER_PET, { pet: { evil: true } })
   await sleep(300)
-  check('a non-string is refused', me().pet, 'c04b1e0')
+  check('a non-string is refused', me().pet, 'd704b1e0')
 
   room.send(Message.UPDATE_PLAYER_PET, { pet: '' })
   await sleep(300)
