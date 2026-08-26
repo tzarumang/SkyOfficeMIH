@@ -6,9 +6,21 @@ import {
   petTextureKey,
 } from '../../../types/Pet'
 import { ensurePetTexture } from '../avatars/petFactory'
+import { playPetVoice, volumeForDistance } from '../avatars/petVoice'
+import { petKindOf, petSeedOf } from '../../../types/Pet'
+import store from '../stores'
 
 /** a pet moves a little faster than its owner, so it can catch up */
 const SPEED = 240
+
+/**
+ * How rarely a pet speaks, and how close it has to be to be heard. Both are
+ * deliberately conservative: this runs beside somebody's work all day, so a pet
+ * across the office is silent and even a nearby one is occasional.
+ */
+const QUIET_MS = 24000
+const EXTRA_QUIET_MS = 46000
+const EARSHOT = 260
 
 /**
  * Follows one player around. Nothing about a pet is networked beyond its
@@ -18,6 +30,7 @@ const SPEED = 240
 export default class Pet extends Phaser.GameObjects.Sprite {
   private descriptor: PetDescriptor
   private facing: 'up' | 'down' | 'left' | 'right' = 'down'
+  private nextVoiceAt = 0
 
   constructor(scene: Phaser.Scene, x: number, y: number, pet: PetDescriptor) {
     super(scene, x, y, petTextureKey(pet))
@@ -35,6 +48,30 @@ export default class Pet extends Phaser.GameObjects.Sprite {
     ensurePetTexture(this.scene, pet)
     this.setTexture(petTextureKey(pet))
     this.play(`${petTextureKey(pet)}_idle_${this.facing}`, true)
+  }
+
+  /**
+   * Occasionally speaks up, if anyone is close enough to hear it and the
+   * listener has not turned pets off. Volume falls away with distance, so a pet
+   * on the far side of the office cannot be heard at all.
+   */
+  maybeSpeak(listenerX: number, listenerY: number, now: number) {
+    if (this.nextVoiceAt === 0) {
+      this.nextVoiceAt = now + QUIET_MS + Math.random() * EXTRA_QUIET_MS
+      return
+    }
+    if (now < this.nextVoiceAt) return
+
+    this.nextVoiceAt = now + QUIET_MS + Math.random() * EXTRA_QUIET_MS
+
+    if (!store.getState().user.petSounds) return
+
+    const distance = Math.hypot(listenerX - this.x, listenerY - this.y)
+    playPetVoice(
+      petKindOf(this.descriptor),
+      petSeedOf(this.descriptor),
+      volumeForDistance(distance, EARSHOT)
+    )
   }
 
   /**
