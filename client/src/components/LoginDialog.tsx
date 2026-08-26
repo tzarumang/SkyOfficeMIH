@@ -12,7 +12,8 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import RefreshIcon from '@mui/icons-material/Refresh'
 
 import { GENDERS, Gender, buildAvatar } from '../../../types/Avatar'
-import { PETS, PetKind, buildPet, NO_PET } from '../../../types/Pet'
+import { PETS, PetKind, buildPet, NO_PET, COATS } from '../../../types/Pet'
+import { PetPreview } from '../avatars/PetPreview'
 import { Portrait } from '../avatars/Portrait'
 import { useAppSelector, useAppDispatch } from '../hooks'
 import { setLoggedIn } from '../stores/UserStore'
@@ -85,6 +86,39 @@ const Left = styled.div`
   align-items: center;
   gap: 10px;
 
+  .pet-chooser {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #dbdbe0;
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .coats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+  }
+
+  .coat {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .coat.chosen {
+    border-color: #222639;
+  }
+
+  .coat:focus-visible {
+    outline: 2px solid #42eacb;
+    outline-offset: 1px;
+  }
+
   .avatar-preview {
     display: flex;
     align-items: center;
@@ -121,6 +155,7 @@ export default function LoginDialog() {
   const [name, setName] = useState<string>('')
   const [gender, setGender] = useState<Gender>('n')
   const [petKind, setPetKind] = useState<PetKind | null>(null)
+  const [petCoat, setPetCoat] = useState(0)
   const [seed, setSeed] = useState<number>(newSeed)
   const avatar = buildAvatar(gender, seed)
   const [nameFieldEmpty, setNameFieldEmpty] = useState<boolean>(false)
@@ -139,7 +174,7 @@ export default function LoginDialog() {
       game.registerKeys()
       game.myPlayer.setPlayerName(name)
       game.myPlayer.setAvatar(avatar)
-      game.myPlayer.setPet(petKind ? buildPet(petKind, seed) : NO_PET)
+      game.myPlayer.setPet(petKind ? buildPet(petKind, petCoat, seed) : NO_PET)
       game.network.readyToConnect()
       dispatch(setLoggedIn(true))
     }
@@ -201,6 +236,26 @@ export default function LoginDialog() {
               </ToggleButton>
             ))}
           </ToggleButtonGroup>
+
+          {petKind && (
+            <div className="pet-chooser">
+              <PetPreview kind={petKind} coat={petCoat} size={48} />
+              <div className="coats">
+                {COATS.map((coat, index) => (
+                  <button
+                    key={coat.label}
+                    type="button"
+                    title={coat.label}
+                    aria-label={coat.label}
+                    aria-pressed={petCoat === index}
+                    className={petCoat === index ? 'coat chosen' : 'coat'}
+                    style={{ background: coat.light }}
+                    onClick={() => setPetCoat(index)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </Left>
         <Right>
           <TextField

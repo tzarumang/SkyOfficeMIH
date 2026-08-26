@@ -1,6 +1,11 @@
 import Phaser from 'phaser'
-import { PetDescriptor, petKindOf, petSeedOf, petTextureKey } from '../../../types/Pet'
-import { seededRandom } from './palette'
+import {
+  COATS,
+  PetDescriptor,
+  petCoatOf,
+  petKindOf,
+  petTextureKey,
+} from '../../../types/Pet'
 
 /**
  * Pets are drawn rather than recoloured, because there is no artwork to start
@@ -12,22 +17,6 @@ import { seededRandom } from './palette'
 const FRAME = 16
 const DIRECTIONS = ['down', 'up', 'left', 'right'] as const
 const FRAMES_PER_DIRECTION = 2
-
-const COATS = [
-  ['#8a5a34', '#6b4526'], // brown
-  ['#2b2118', '#171009'], // black
-  ['#d8d0c0', '#b8afa0'], // cream
-  ['#c96b3d', '#a3532c'], // ginger
-  ['#8c8c8c', '#6e6e6e'], // grey
-  ['#e0b566', '#bf9750'], // sand
-]
-
-const BIRD_COATS = [
-  ['#4a90d9', '#3670ad'],
-  ['#d9d94a', '#adad36'],
-  ['#5ac96b', '#46a153'],
-  ['#d94a6b', '#ad3653'],
-]
 
 /**
  * The drawn characters carry a dark outline, which is what lets them read
@@ -133,15 +122,31 @@ function drawBody(
   }
 }
 
+/**
+ * Draws a single facing-forward frame, so the picker can show the pet somebody
+ * is choosing. Shares the drawing with the spritesheet, so a preview can never
+ * disagree with what actually walks around the office.
+ */
+export function drawPetPreview(canvas: HTMLCanvasElement, kind: string, coatIndex: number) {
+  const chosen = COATS[COATS[coatIndex] ? coatIndex : 0]
+  const context = canvas.getContext('2d')
+  if (!context) return
+
+  canvas.width = FRAME
+  canvas.height = FRAME
+  context.imageSmoothingEnabled = false
+  context.clearRect(0, 0, FRAME, FRAME)
+  drawFrame(context, kind, 'down', 0, [chosen.light, chosen.dark])
+}
+
 /** builds the pet's spritesheet and animations if they do not exist yet */
 export function ensurePetTexture(scene: Phaser.Scene, pet: PetDescriptor) {
   const textureKey = petTextureKey(pet)
   if (scene.textures.exists(textureKey)) return textureKey
 
   const kind = petKindOf(pet)
-  const random = seededRandom(petSeedOf(pet))
-  const palette = kind === 'b' ? BIRD_COATS : COATS
-  const coat = palette[Math.floor(random() * palette.length)]
+  const chosen = COATS[petCoatOf(pet)]
+  const coat = [chosen.light, chosen.dark]
 
   const canvas = document.createElement('canvas')
   canvas.width = FRAME * DIRECTIONS.length * FRAMES_PER_DIRECTION
