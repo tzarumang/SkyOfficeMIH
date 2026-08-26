@@ -217,17 +217,17 @@ function wallGid(layout: Layout, x: number, y: number): number {
 
   if (runsVertically && (floorLeft || floorRight)) {
     // A doorway punched through the wall stops the run here, and a wall seen
-    // end-on is not a bare edge: it is a cap with its front face beneath it,
-    // the same two rows every room's top wall is drawn from. Without them the
-    // wall ends in a blank block with no front to it at all, which is what made
-    // the way into a room look broken rather than open.
+    // end-on is not a bare edge - it shows its front. That is the room's own
+    // wall face, so the body runs straight into it and the wall reads as
+    // having a front rather than simply stopping.
+    //
+    // The cap that sits over a face on a room's top wall has no place here:
+    // there the cap is the top of the wall, while here the wall above it is
+    // already drawn, so it only opened a bare strip between the two.
     //
     // Only against floor - the outside of the building ends against nothing at
     // all, and is left exactly as it was.
     if (isFloor(layout, x, y + 1)) return styleOf(layout, x, y + 1).wallRows[1]
-    if (isFloor(layout, x, y + 2) && isWall(layout, x, y + 1)) {
-      return styleOf(layout, x, y + 2).wallRows[0]
-    }
 
     if (floorLeft && floorRight) return WALLS.shared
     return floorRight ? WALLS.leftEdge : WALLS.rightEdge
