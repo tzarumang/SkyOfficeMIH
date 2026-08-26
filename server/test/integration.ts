@@ -1031,6 +1031,7 @@ async function generatedRoomTests() {
     computerDesks: 7,
     plainDesks: 5,
     lounges: 1,
+    trainingRooms: 0,
   }
   const built = await client.create('custom', {
     name: 'To Order',
@@ -1063,6 +1064,45 @@ async function generatedRoomTests() {
   )
   check('and the server tracks that many screen shares', (built.state as any).computers.size, 7)
   await built.leave()
+
+  // A training room is rows of chairs facing a screen, and that screen is a
+  // computer as far as everything else is concerned - which is the whole point
+  // of it: the same key, the same sharing, the same bookkeeping.
+  const withTraining: OfficeSpec = { ...ordered, trainingRooms: 1 }
+  const trained = await client.create('custom', {
+    name: 'Training',
+    description: 'a room with a screen',
+    password: null,
+    unlisted: false,
+    layout: 'generated',
+    office: withTraining,
+  })
+  await sleep(300)
+  const trainedId = (trained.state as any).mapId
+  const trainedSpec = parseOfficeId(trainedId)!
+  const trainedGot = contentsOf(
+    generateOffice({ seed: trainedSpec.seed, spec: trainedSpec.spec })
+  )
+  check('a training room is built when one is asked for', trainedGot.trainingRooms, 1)
+  check(
+    'and its screen is one more share than the desks alone',
+    (trained.state as any).computers.size,
+    8
+  )
+  await trained.leave()
+
+  // the id is how a kept office is found again, and offices were recorded
+  // before training rooms existed
+  check(
+    'an office id written before training rooms still parses',
+    parseOfficeId('123456-1-1-5-10-1')?.spec.trainingRooms,
+    0
+  )
+  check(
+    'and one written since carries the count',
+    parseOfficeId('123456-1-1-5-10-1-2')?.spec.trainingRooms,
+    2
+  )
 }
 
 

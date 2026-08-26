@@ -18,6 +18,8 @@ export interface OfficeSpec {
   plainDesks: number
   /** a vending machine and somewhere to sit */
   lounges: number
+  /** rows of chairs facing a screen anyone in the room can share to */
+  trainingRooms: number
 }
 
 export interface OfficeSpecField {
@@ -63,6 +65,12 @@ export const OFFICE_SPEC_FIELDS: OfficeSpecField[] = [
     hint: 'A vending machine and a few tables.',
     max: 3,
   },
+  {
+    key: 'trainingRooms',
+    label: 'Training rooms',
+    hint: 'Rows of chairs facing a screen anyone can share to.',
+    max: 3,
+  },
 ]
 
 /** roughly the office that ships with the client */
@@ -72,6 +80,7 @@ export const DEFAULT_OFFICE_SPEC: OfficeSpec = {
   computerDesks: 5,
   plainDesks: 10,
   lounges: 1,
+  trainingRooms: 0,
 }
 
 function clampCount(value: unknown, max: number) {
@@ -91,7 +100,9 @@ export function clampOfficeSpec(input: Partial<OfficeSpec> | undefined | null): 
     spec[field.key] = clampCount(input?.[field.key], field.max)
   }
 
-  if (spec.meetingRooms + spec.oneOnOneRooms + spec.lounges === 0) spec.lounges = 1
+  if (spec.meetingRooms + spec.oneOnOneRooms + spec.lounges + spec.trainingRooms === 0) {
+    spec.lounges = 1
+  }
   return spec
 }
 
@@ -100,7 +111,7 @@ export function totalDesks(spec: OfficeSpec) {
 }
 
 export function totalRooms(spec: OfficeSpec) {
-  return spec.meetingRooms + spec.oneOnOneRooms + spec.lounges
+  return spec.meetingRooms + spec.oneOnOneRooms + spec.lounges + spec.trainingRooms
 }
 
 /**
@@ -118,22 +129,37 @@ export function encodeOfficeId(seed: number, spec: OfficeSpec) {
     spec.computerDesks,
     spec.plainDesks,
     spec.lounges,
+    spec.trainingRooms,
   ].join('-')
 }
 
-export const OFFICE_ID_PATTERN = /^\d{1,10}(-\d{1,2}){5}$/
+/**
+ * Five counts, or six.
+ *
+ * Training rooms arrived after offices had already been recorded with their
+ * ids, and an office with a lifetime is found by that id. The sixth count is
+ * optional so those ids still parse - an office written before training rooms
+ * existed simply has none.
+ */
+export const OFFICE_ID_PATTERN = /^\d{1,10}(-\d{1,2}){5,6}$/
 
 export function parseOfficeId(id: unknown): { seed: number; spec: OfficeSpec } | null {
   if (typeof id !== 'string' || !OFFICE_ID_PATTERN.test(id)) return null
 
-  const [seed, meetingRooms, oneOnOneRooms, computerDesks, plainDesks, lounges] = id
-    .split('-')
-    .map(Number)
+  const [seed, meetingRooms, oneOnOneRooms, computerDesks, plainDesks, lounges, trainingRooms] =
+    id.split('-').map(Number)
 
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) return null
 
   return {
     seed,
-    spec: clampOfficeSpec({ meetingRooms, oneOnOneRooms, computerDesks, plainDesks, lounges }),
+    spec: clampOfficeSpec({
+      meetingRooms,
+      oneOnOneRooms,
+      computerDesks,
+      plainDesks,
+      lounges,
+      trainingRooms: trainingRooms ?? 0,
+    }),
   }
 }

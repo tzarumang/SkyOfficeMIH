@@ -33,7 +33,13 @@ export default class Bootstrap extends Phaser.Scene {
     this.load.tilemapTiledJSON('tilemap', 'assets/map/map.json')
 
     // the map's scenery and its items each name their own artwork
-    const sheets = [...TILESETS, ...ITEM_TYPES.map((itemType) => ITEM_SPECS[itemType])]
+    const sheets = [
+      ...TILESETS,
+      ...ITEM_TYPES.flatMap((itemType) => [
+        ITEM_SPECS[itemType],
+        ...(ITEM_SPECS[itemType].alternates ?? []),
+      ]),
+    ]
     sheets.forEach(({ texture, file, frameWidth, frameHeight }) => {
       this.load.spritesheet(texture, file, { frameWidth, frameHeight })
     })

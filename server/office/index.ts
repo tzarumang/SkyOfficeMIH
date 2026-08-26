@@ -156,6 +156,7 @@ export function contentsOf(office: GeneratedOffice) {
     meetingRooms: roomsOfType('conference'),
     oneOnOneRooms: roomsOfType('private'),
     lounges: roomsOfType('lounge'),
+    trainingRooms: roomsOfType('training'),
     computerDesks: layers.get('Computer') ?? 0,
     desks: office.layout.deskSlots.length,
     whiteboards: layers.get('Whiteboard') ?? 0,
