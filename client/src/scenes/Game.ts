@@ -47,31 +47,41 @@ export default class Game extends Phaser.Scene {
     super('game')
   }
 
+  /**
+   * 3.90 types keyboard input as optional, because a game can be configured
+   * without it. Ours is not, so assert it once here rather than at every use.
+   */
+  private get keyboard() {
+    const keyboard = this.input.keyboard
+    if (!keyboard) throw new Error('this game needs keyboard input to be enabled')
+    return keyboard
+  }
+
   registerKeys() {
     this.cursors = {
-      ...this.input.keyboard.createCursorKeys(),
-      ...(this.input.keyboard.addKeys('W,S,A,D') as Keyboard),
+      ...this.keyboard.createCursorKeys(),
+      ...(this.keyboard.addKeys('W,S,A,D') as Keyboard),
     }
 
     // maybe we can have a dedicated method for adding keys if more keys are needed in the future
-    this.keyE = this.input.keyboard.addKey('E')
-    this.keyR = this.input.keyboard.addKey('R')
-    this.input.keyboard.disableGlobalCapture()
-    this.input.keyboard.on('keydown-ENTER', (event) => {
+    this.keyE = this.keyboard.addKey('E')
+    this.keyR = this.keyboard.addKey('R')
+    this.keyboard.disableGlobalCapture()
+    this.keyboard.on('keydown-ENTER', (event) => {
       store.dispatch(setShowChat(true))
       store.dispatch(setFocused(true))
     })
-    this.input.keyboard.on('keydown-ESC', (event) => {
+    this.keyboard.on('keydown-ESC', (event) => {
       store.dispatch(setShowChat(false))
     })
   }
 
   disableKeys() {
-    this.input.keyboard.enabled = false
+    this.keyboard.enabled = false
   }
 
   enableKeys() {
-    this.input.keyboard.enabled = true
+    this.keyboard.enabled = true
   }
 
   create(data: { network: Network; mapKey?: string }) {
@@ -85,8 +95,14 @@ export default class Game extends Phaser.Scene {
 
     this.map = this.make.tilemap({ key: data.mapKey ?? 'tilemap' })
     const groundTileset = this.map.addTilesetImage(GROUND_LAYER.tileset, GROUND_LAYER.texture)
+    if (!groundTileset) {
+      throw new Error(`office is missing the "${GROUND_LAYER.tileset}" tileset`)
+    }
 
     const groundLayer = this.map.createLayer(GROUND_LAYER.layer, groundTileset)
+    if (!groundLayer) {
+      throw new Error(`office is missing the "${GROUND_LAYER.layer}" layer`)
+    }
     groundLayer.setCollisionByProperty({ collides: true })
 
     // the social rules of the rooms live in the map alongside their furniture
@@ -109,6 +125,7 @@ export default class Game extends Phaser.Scene {
       const group = this.physics.add.staticGroup({ classType: itemClass(itemType) })
       const objectLayer = this.map.getObjectLayer(spec.layer)
       const itemsById = new Map<string, Item>()
+      if (!objectLayer) throw new Error(`office is missing the "${spec.layer}" layer`)
 
       objectLayer.objects.forEach((object, index) => {
         const item = this.addObjectFromTiled(group, object, spec.texture, spec.tileset) as Item
@@ -226,8 +243,11 @@ export default class Game extends Phaser.Scene {
   ) {
     const actualX = object.x! + object.width! * 0.5
     const actualY = object.y! - object.height! * 0.5
+    const tileset = this.map.getTileset(tilesetName)
+    if (!tileset) throw new Error(`office is missing the "${tilesetName}" tileset`)
+
     const obj = group
-      .get(actualX, actualY, key, object.gid! - this.map.getTileset(tilesetName).firstgid)
+      .get(actualX, actualY, key, object.gid! - tileset.firstgid)
       .setDepth(actualY)
 
     // Furniture that only exists one way round is placed mirrored: Tiled packs
@@ -239,6 +259,8 @@ export default class Game extends Phaser.Scene {
   private addGroupFromTiled(spec: DecorLayerSpec) {
     const group = this.physics.add.staticGroup()
     const objectLayer = this.map.getObjectLayer(spec.layer)
+    if (!objectLayer) throw new Error(`office is missing the "${spec.layer}" layer`)
+
     objectLayer.objects.forEach((object) => {
       this.addObjectFromTiled(group, object, spec.texture, spec.tileset)
     })

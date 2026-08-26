@@ -61,6 +61,20 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       .setOffset(-8, this.height * (1 - collisionScale[1]) + 6)
   }
 
+  /**
+   * 3.90 types currentAnim as nullable, which is honest - there is a moment
+   * before the first animation plays. A player always faces somewhere, so fall
+   * back to their idle rather than propagating a null.
+   */
+  protected get currentAnimKey() {
+    return this.anims.currentAnim?.key ?? `${this.playerTexture}_idle_down`
+  }
+
+  /** every player is added to a physics group, so it always has an arcade body */
+  protected get arcadeBody() {
+    return this.body as Phaser.Physics.Arcade.Body
+  }
+
   updateDialogBubble(content: string) {
     this.clearDialogBubble()
 
