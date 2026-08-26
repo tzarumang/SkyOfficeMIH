@@ -95,8 +95,10 @@ export const ITEM_SPECS: Record<ItemType, ItemSpec> = {
     frameWidth: 48,
     frameHeight: 72,
     tileset: 'vendingmachine',
-    key: 'R',
-    prompt: () => 'Press R to buy a coffee :)',
+    // No key, so it is scenery: an item without one is never selectable, which
+    // is what has the buy-a-coffee link turned off for the time being. Putting
+    // `key: 'R'` back is all it takes to switch it on again.
+    prompt: () => 'A vending machine',
     collides: true,
     shared: false,
     reach: 64,
