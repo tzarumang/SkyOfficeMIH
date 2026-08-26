@@ -37,6 +37,10 @@ export const STYLES: Record<string, RoomStyle> = {
   private: { wallRows: [594, 658], skirt: 604, floor: 668 },
   // the corridor down the middle, map rows 10-13
   corridor: { wallRows: [722, 786], skirt: 351, floor: 415 },
+  // A training room is walled and floored like a meeting room - it is the same
+  // kind of space, and borrowing the style keeps the two reading as one office
+  // rather than as rooms from different buildings.
+  training: { wallRows: [930, 994], skirt: 2319, floor: 2383 },
 }
 
 /**
@@ -80,6 +84,17 @@ export const OFFICE_CHAIR = 2569
 export const COMPUTER_GIDS = [4680, 4681, 4682, 4683, 4684]
 export const WHITEBOARD_GIDS = [4685, 4686, 4687]
 export const VENDING_GID = 5488
+
+/**
+ * The screen a training room is arranged around.
+ *
+ * It sits on the Computer layer and the server counts it as one, because that
+ * is exactly what it is: the same key, the same sharing, the same bookkeeping.
+ * Only the picture differs, and the gid is what says so - it belongs to the
+ * screen tileset rather than the computer one, and the client draws whichever
+ * sheet the gid came from.
+ */
+export const SCREEN_GID = 5489
 
 /**
  * The unit the production floor is built out of. Zooming right into the bank
@@ -173,6 +188,34 @@ function prefab(layer: string, rows: number[][], extra: Prefab['parts'] = []): P
     parts: [...parts, ...extra],
   }
 }
+
+/**
+ * Pieces the revamped tileset brought with it.
+ *
+ * Version 1.2 of the artist's Modern Office pack fills in slots that were blank
+ * in the copy this project shipped - 66 of them, every existing tile left
+ * untouched - so these are new furniture rather than a redraw of old furniture.
+ * Read off the sheet the same way as everything else here: rows 38 to 42 of the
+ * Modern Office tileset, which used to be empty.
+ */
+
+/** a drinks counter: water on one side, coffee on the other, in two wood tones */
+export const DRINKS_COUNTERS: Prefab[] = [
+  prefab('ObjectsOnCollide', [
+    [3200, 3201],
+    [3216, 3217],
+  ]),
+  prefab('ObjectsOnCollide', [
+    [3202, 3203],
+    [3218, 3219],
+  ]),
+]
+
+/** the office printer, its paper tray beside it */
+export const PRINTERS: Prefab[] = [
+  prefab('ObjectsOnCollide', [[3264, 3265]]),
+  prefab('ObjectsOnCollide', [[3266, 3267]]),
+]
 
 /** the pool table in the games room, map columns 7-10 rows 7-9 */
 export const POOL_TABLE = prefab(
@@ -350,4 +393,5 @@ export const EXPECTED_FIRSTGIDS: Record<string, number> = {
   whiteboard: 4685,
   Basement: 4688,
   vendingmachine: 5488,
+  screen: 5489,
 }

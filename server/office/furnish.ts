@@ -29,6 +29,9 @@ import {
   TABLE,
   TILE,
   VENDING_GID,
+  SCREEN_GID,
+  DRINKS_COUNTERS,
+  PRINTERS,
   WALL_ART,
   WATER_COOLER,
   WHITEBOARD_GIDS,
@@ -109,6 +112,9 @@ export function furnish(rng: Rng, layout: Layout, spec: OfficeSpec): Placement[]
         break
       case 'lounge':
         out.push(...lounge(rng, room))
+        break
+      case 'training':
+        out.push(...trainingRoom(rng, room))
         break
       case 'corridor':
         out.push(...hallway(rng, room))
@@ -389,6 +395,54 @@ function hallway(rng: Rng, room: Room): Placement[] {
 }
 
 /**
+ * A room arranged around a screen: rows of chairs, all of them facing it.
+ *
+ * The screen goes on the Computer layer rather than one of its own, because it
+ * is a computer - the server counts it, tracks who is on it and hands out the
+ * screen share exactly as it does for a desk. Only the picture is different,
+ * and its gid is what chooses that.
+ *
+ * The front row starts clear of the screen so nobody is sitting under it, and
+ * the aisle down the middle is what stops a full room being a wall of chairs
+ * with no way to the back.
+ */
+function trainingRoom(rng: Rng, room: Room): Placement[] {
+  const out: Placement[] = []
+  const rows = usableRows(room)
+  const cols = usableColumns(room)
+  const clear = doorways(room)
+
+  // the screen, centred on the wall everyone is looking at
+  const SCREEN = { width: 2, height: 2 }
+  const screenX = Math.floor((cols.from + cols.to + 1 - SCREEN.width) / 2)
+  out.push({
+    layer: 'Computer',
+    gid: SCREEN_GID,
+    tx: screenX,
+    // Hung the way the whiteboard is: its foot on the first walkable row, so
+    // it is against the wall to look at and inside the room to use. Squarely
+    // in the wall rows it would be out of everyone's reach.
+    ty: room.y0 + STYLES[styleKeyOf(room.archetype)].wallRows.length,
+    widthPx: SCREEN.width * TILE,
+    heightPx: SCREEN.height * TILE,
+  })
+
+  // Rows of chairs facing it, with a gap at the front so the first row is not
+  // pressed against the wall, and an aisle down the middle.
+  const aisle = Math.floor((cols.from + cols.to) / 2)
+  for (let y = rows.from + 2; y <= rows.to; y += 2) {
+    for (let x = cols.from; x <= cols.to; x++) {
+      if (x === aisle) continue
+      if (blocks(clear, x, y, 1, 1)) continue
+      out.push(chair('up', x, y))
+    }
+  }
+
+  out.push(...dressWalls(rng, room, [screenX - 1, screenX + SCREEN.width], { board: false }))
+  return out
+}
+
+/**
  * The games room from the hand-drawn map: a pool table, a couch with a seat
  * either side of it, and the machine everyone actually comes for.
  */
@@ -467,6 +521,7 @@ function lounge(rng: Rng, room: Room): Placement[] {
     })
     break
   }
+
 
   // The tables run the length of the room at the same rows a decoration would
   // want, so what is left over is whatever the loop above did not reach.
@@ -708,6 +763,23 @@ function dressWalls(
     spoken.push([windowX, windowX + window.width - 1])
   }
 
+  // A drinks counter, let into the wall the same way the window is. It cannot
+  // stand on the floor: a lounge has none to spare, and a second solid thing
+  // against the back wall pinches the room in two.
+  if (rng.chance(0.45)) {
+    const counter = rng.pick(DRINKS_COUNTERS)
+    for (let cx = room.ix0; cx <= room.ix1 - counter.width + 1; cx++) {
+      const clashes =
+        spoken.some(([from, to]) => cx <= to && cx + counter.width - 1 >= from) ||
+        blocks(clear, cx, room.y0, counter.width, counter.height)
+      if (clashes) continue
+
+      out.push(...stamp(counter, cx, room.y0))
+      spoken.push([cx, cx + counter.width - 1])
+      break
+    }
+  }
+
   // Pictures along the rest of it. A blank wall is what makes a room read as
   // unfinished however much furniture is standing in front of it.
   let hung = 0
@@ -730,7 +802,15 @@ function dressWalls(
 
   if (!corner) return out
 
-  const piece = rng.chance(0.4) && rows.to - 2 >= rows.from ? WATER_COOLER : PLANT
+  // A printer is the third thing an office corner holds, after something to
+  // drink from and something green. It is short, so unlike the water cooler it
+  // fits a room with barely any wall left.
+  const tall = rows.to - 2 >= rows.from
+  const piece = rng.chance(0.3)
+    ? rng.pick(PRINTERS)
+    : rng.chance(0.4) && tall
+    ? WATER_COOLER
+    : PLANT
   const top = rows.to - piece.height + 1
   if (top >= rows.from) {
     const corners = [room.ix0, room.ix1 - piece.width + 1].filter(

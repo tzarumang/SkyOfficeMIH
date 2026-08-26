@@ -16,6 +16,25 @@ export enum ItemType {
  * needs WebRTC and a whiteboard needs its board URL. The table says which items
  * are interactive; the item classes say what they do.
  */
+/**
+ * A second picture for a kind of item, drawn from its own tileset.
+ *
+ * A training room's screen is a computer in every way that matters - the same
+ * key, the same sharing, the same server bookkeeping - and differs only in
+ * what it looks like. Rather than a second item type carrying a duplicate of
+ * all that, an item may be drawn from more than one sheet, and which one is
+ * decided by the tileset the map's gid came from.
+ */
+export interface ItemArt {
+  /** tileset in the map whose gids select this picture */
+  tileset: string
+  /** texture key, and the spritesheet it is loaded from */
+  texture: string
+  file: string
+  frameWidth: number
+  frameHeight: number
+}
+
 export interface ItemSpec {
   /** object layer of the Tiled map holding these */
   layer: string
@@ -42,6 +61,8 @@ export interface ItemSpec {
   reach: number
   /** shifts the sprite along the depth axis, to sit in front of or behind a player */
   depthOffset: number
+  /** other pictures the same item can be drawn with */
+  alternates?: ItemArt[]
 }
 
 export const ITEM_SPECS: Record<ItemType, ItemSpec> = {
@@ -67,12 +88,23 @@ export const ITEM_SPECS: Record<ItemType, ItemSpec> = {
     frameHeight: 64,
     tileset: 'computer',
     key: 'R',
-    prompt: (users) => (users === 0 ? 'Press R to use computer' : 'Press R join'),
+    // Worded for both the pictures below: a desk computer and a training
+    // room's screen are the same item, and share this line.
+    prompt: (users) => (users === 0 ? 'Press R to share your screen' : 'Press R to join'),
     collides: false,
     shared: true,
     reach: 64,
     // the sprite is tall, and a player using it stands behind the screen
     depthOffset: 0.27,
+    alternates: [
+      {
+        tileset: 'screen',
+        texture: 'screens',
+        file: 'assets/items/screen.png',
+        frameWidth: 64,
+        frameHeight: 64,
+      },
+    ],
   },
   [ItemType.WHITEBOARD]: {
     layer: 'Whiteboard',

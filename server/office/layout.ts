@@ -20,7 +20,7 @@ export const FLOOR = 1
 export const WALL = 2
 export type Cell = typeof VOID | typeof FLOOR | typeof WALL
 
-export type Archetype = 'open' | 'conference' | 'private' | 'lounge' | 'corridor'
+export type Archetype = 'open' | 'conference' | 'private' | 'lounge' | 'corridor' | 'training'
 
 /** what each archetype does to the audio of the people standing in it */
 export const ARCHETYPE_AUDIO: Record<Archetype, string> = {
@@ -29,6 +29,8 @@ export const ARCHETYPE_AUDIO: Record<Archetype, string> = {
   lounge: 'proximity',
   conference: 'room',
   private: 'room-sealed',
+  // everyone in a training room is meant to hear whoever is presenting
+  training: 'room',
 }
 
 export interface Room {
@@ -104,6 +106,8 @@ const ROOM_HEIGHTS: Record<Exclude<Archetype, 'open' | 'corridor'>, number> = {
   private: 8,
   // its middle room, rows 11-16
   lounge: 7,
+  // deep enough for the screen, a gap to see past it, and rows of chairs
+  training: 9,
 }
 
 /**
@@ -418,6 +422,7 @@ function roomStack(rng: Rng, spec: OfficeSpec): StackEntry[] {
   add('conference', 'Meeting Room', spec.meetingRooms)
   add('private', '1-on-1 Room', spec.oneOnOneRooms)
   add('lounge', 'Lounge', spec.lounges)
+  add('training', 'Training Room', spec.trainingRooms)
 
   return rng.shuffle(entries)
 }

@@ -27431,6 +27431,19 @@
          "tilecount":1,
          "tileheight":72,
          "tilewidth":48
+        },
+        {
+         "columns":1,
+         "firstgid":5489,
+         "image":"../items/screen.png",
+         "imageheight":64,
+         "imagewidth":64,
+         "margin":0,
+         "name":"screen",
+         "spacing":0,
+         "tilecount":1,
+         "tileheight":64,
+         "tilewidth":64
         }],
  "tilewidth":32,
  "type":"map",

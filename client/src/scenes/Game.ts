@@ -15,7 +15,7 @@ import Network from '../services/Network'
 import { zoneManager } from '../zones/ZoneManager'
 import { IPlayer } from '../../../types/IOfficeState'
 import { PlayerBehavior } from '../../../types/PlayerBehavior'
-import { ITEM_SPECS, ITEM_TYPES, ItemType } from '../../../types/Items'
+import { ITEM_SPECS, ITEM_TYPES, ItemSpec, ItemType } from '../../../types/Items'
 import { DECOR_LAYERS, DecorLayerSpec, GROUND_LAYER } from '../../../types/MapLayers'
 import { readSpawn } from '../../../types/Spawn'
 import { textureFromAnim } from '../util'
@@ -137,7 +137,8 @@ export default class Game extends Phaser.Scene {
       if (!objectLayer) throw new Error(`office is missing the "${spec.layer}" layer`)
 
       objectLayer.objects.forEach((object, index) => {
-        const item = this.addObjectFromTiled(group, object, spec.texture, spec.tileset) as Item
+        const art = this.artFor(spec, object.gid!)
+        const item = this.addObjectFromTiled(group, object, art.texture, art.tileset) as Item
         item.itemType = itemType
         item.id = `${index}`
         if (spec.depthOffset) item.setDepth(item.y + item.height * spec.depthOffset)
@@ -249,6 +250,20 @@ export default class Game extends Phaser.Scene {
     // set selected item and set up new dialog
     playerSelector.selectedItem = selectionItem
     selectionItem.onOverlapDialog()
+  }
+
+  /**
+   * Which of an item's pictures a placement wants. An item drawn from more
+   * than one sheet says so in its spec, and the gid decides: it belongs to one
+   * tileset, and that tileset names the sheet.
+   */
+  private artFor(spec: ItemSpec, gid: number) {
+    for (const alternate of spec.alternates ?? []) {
+      const tileset = this.map.getTileset(alternate.tileset)
+      if (!tileset) continue
+      if (gid >= tileset.firstgid && gid < tileset.firstgid + tileset.total) return alternate
+    }
+    return spec
   }
 
   private addObjectFromTiled(
