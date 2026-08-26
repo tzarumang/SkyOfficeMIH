@@ -1,96 +1,92 @@
-# SkyOffice ![License](https://img.shields.io/badge/license-MIT-blue) ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-green.svg)
+# SkyOffice ![License](https://img.shields.io/badge/license-MIT-blue)
 
-<img alt="Logo" align="right" src="https://user-images.githubusercontent.com/11501902/139942585-a6b044ce-3695-460a-91bd-dd9f1d4611c8.png" width="20%" />
+An immersive virtual office: a small pixel-art building you walk around, where
+standing near someone starts a video call, sitting at a desk lets you share your
+screen, and every office can be shaped by whoever creates it.
 
-An immersive virtual office - Winner of [2021 Monte Jade Innovation Competition](https://www.montejadese.org/innovation-competition)
+> **This is an independent fork.** It began as [kevinshen56714/SkyOffice][upstream]
+> and has since gone its own way - the two are no longer kept in step, and
+> nothing here is maintained by the original author. Bug reports and pull
+> requests belong on **this** repository. The original project's website,
+> social accounts and funding links are its own and have been removed from here;
+> see [Where this came from](#where-this-came-from) for what is still owed to it.
 
-- Come try it out - [Official Website](https://skyoffice.netlify.app)
-- Why we built this - [Concept Video](https://www.youtube.com/watch?v=BpDqGTPh8pc)
-- 🙌 Get latest updates? Follow our [Twitter](https://twitter.com/SkyOfficeApp).
-- 💕 Love this project? Consider [buy me a coffee](https://www.buymeacoffee.com/skyoffice).
+Works in desktop browsers. Mobile browsers are not supported.
 
-SkyOffice works on all PC browsers (mobile browsers are currently not supported)
+[upstream]: https://github.com/kevinshen56714/SkyOffice
 
 ## Built with
 
-- [Phaser3](https://github.com/photonstorm/phaser) - Game engine
-- [Colyseus](https://github.com/colyseus/colyseus) - WebSocket-based server framework
-- [React/Redux](https://github.com/facebook/react) - Front-end framework
-- [PeerJS](https://github.com/peers/peerjs) - WebRTC for video/screen sharing
-- [TypeScript](https://github.com/microsoft/TypeScript) and [ES6](https://github.com/eslint/eslint) - for both client and server sides
+- [Phaser 3](https://github.com/photonstorm/phaser) - game engine
+- [Colyseus](https://github.com/colyseus/colyseus) - authoritative WebSocket server
+- [React](https://github.com/facebook/react) and [Redux](https://github.com/reduxjs/redux-toolkit) - the interface over the game
+- [PeerJS](https://github.com/peers/peerjs) - WebRTC for video and screen sharing
+- [TypeScript](https://github.com/microsoft/TypeScript) on both sides, sharing the `types/` folder
 
-## Features
+## What is in it
 
-- [Proximity Chat](#proximity-chat-distance-based-interactive-system)
-- [Flexible Screen Sharing](#flexible--immediate-screen-sharing)
-- [Multifunctional Rooms](#multifunctional-rooms)
-- [Text Message Chat](#text-message-chat-with-real-time-dialog-bubbles)
-- [Custom/Private Rooms](#customprivate-rooms)
-- [Embedded Whiteboards](#embedded-whiteboards) (iframe embed of [WBO](https://github.com/lovasoa/whitebophir))
+Inherited from the original project:
 
-### Proximity Chat (distance-based interactive system)
+- **Proximity chat** - walking near someone opens a video call, walking away ends it
+- **Screen sharing** - sit at a computer and share; anyone at the same desk sees it
+- **Text chat** with dialog bubbles over people's heads
+- **Embedded whiteboards** - an iframe of [WBO](https://github.com/lovasoa/whitebophir)
+- **Private offices** with a password, and unlisted ones reachable by ID only
 
-![image](https://user-images.githubusercontent.com/11501902/139960852-cf0e0883-8fbe-459d-bb11-3707d0ae1360.png)
+Added here:
 
-### Multifunctional Rooms
-
-![image](https://user-images.githubusercontent.com/11501902/139961091-1801bd4d-fbd6-4400-8503-85ece744e979.png)
-
-### Flexible & Immediate Screen Sharing
-
-![image](https://user-images.githubusercontent.com/11501902/139961155-44a85cd9-ac25-4563-9d82-6537ed7435f6.png)
-
-### Text Message Chat (with real time dialog bubbles)
-
-![image](https://user-images.githubusercontent.com/11501902/145925423-3b5b9026-d3b9-429d-920b-98b0bcd6300a.png)
-
-### Embedded Whiteboards
-
-![image](https://user-images.githubusercontent.com/11501902/147785323-19dbf0e6-056d-44c5-8efe-e969297bbe52.png)
-
-### Custom/Private Rooms
-
-![image](https://user-images.githubusercontent.com/11501902/147784118-15ef50bf-0f67-4704-89d7-81b2fa7f8ceb.png)
+- **Generated floor plans.** An office can use the hand-drawn building or a new
+  one grown from a seed, sized to hold the meeting rooms, desks and lounges you
+  ask for. The generator checks its own output before serving it.
+- **Offices that outlive the room.** Choose a lifetime and the office gets a
+  stable share link that keeps working when nobody is inside.
+- **Chat that lasts as long as the office does.** Reopening a kept link brings
+  the conversation back; a disposable office remembers nothing.
+- **Generated avatars** - pick a look rather than one of four fixed characters.
+- **Pets** - a dog, cat or bird in the colour you choose, that follows you around
+  and occasionally makes itself heard.
+- **A cleaning robot** - optional, custom offices only, driven by the server so
+  everyone sees it in the same place.
+- **A company logo** - upload one and the browser reduces it to a handful of
+  colours and hangs it in the hallway.
+- **Deployment as a container stack**, configured at runtime rather than baked
+  into the build - see [Deployment](#deployment).
+- **A test suite and CI** - a real client driving a real server in-process, plus
+  a dependency-advisory baseline.
 
 ## Controls
 
-- `W, A, S, D, or arrow keys` to move (video chat will start if you are close to someone else)
+- `W A S D` or the arrow keys to move - a video call starts when you get close to someone
 - `E` to sit down
-- `R` to use computer (for screen sharing)
-- `Enter` to open chat
-- `ESC` to close chat
+- `R` to use a computer or a whiteboard
+- `Enter` to open the chat, `Esc` to close it
 
 ## Prerequisites
 
-You'll need [Node.js](https://nodejs.org/en/), [npm](https://www.npmjs.com/) installed.
+[Node.js](https://nodejs.org/en/) and [Yarn](https://yarnpkg.com/).
 
-## Getting Started
-
-Clone this repository to your local machine:
+## Getting started
 
 ```bash
-git clone https://github.com/kevinshen56714/SkyOffice.git
+git clone https://github.com/tzarumang/SkyOfficeMIH.git
+cd SkyOfficeMIH
 ```
 
-This will create a folder named `SkyOffice`. You can specify a different folder name like this:
+The server and the client are installed and run separately. In one terminal:
 
 ```bash
-git clone https://github.com/kevinshen56714/SkyOffice.git my-folder-name
-```
-
-To start a server, go into the project folder and install dependencies/run start command:
-
-```bash
-cd SkyOffice or 'my-folder-name'
 yarn && yarn start
 ```
 
-To start a client, go into the client folder and install dependencies/run start command:
+and in another:
 
 ```bash
-cd SkyOffice/client or 'my-folder-name/client'
+cd client
 yarn && yarn dev
 ```
+
+The client then runs on <http://localhost:5173> and looks for a server on the
+same hostname at port 2567.
 
 ## Deployment
 
@@ -207,16 +203,26 @@ pull request.
 published one fails the build while the accepted backlog does not. When you fix or
 accept one, run `yarn audit:update` and commit the diff.
 
-## Credits 🎉
+## Where this came from
 
-Big thanks to this great repo - [ourcade/phaser3-typescript-parcel-template](https://github.com/ourcade/phaser3-typescript-parcel-template)
+Everything here is built on [SkyOffice][upstream] by Kuan-Hsuan Shen, which won
+the 2021 Monte Jade Innovation Competition. The proximity chat, the screen
+sharing, the whiteboards and the hand-drawn office are all that project's work,
+and this one would not exist without it.
 
-Big thanks to pixel artist - [LimeZu](https://limezu.itch.io/)
+That project has its own website, social accounts and funding page. They are
+not this fork's, so they are no longer linked from here or from the app - the
+right place to support the original work is [upstream][upstream], not us.
 
-Big thanks to open-source whiteboard project - [WBO](https://github.com/lovasoa/whitebophir)
+## Credits
+
+- [SkyOffice][upstream] by Kuan-Hsuan Shen - the project this is built on
+- [LimeZu](https://limezu.itch.io/) - the pixel art
+- [WBO](https://github.com/lovasoa/whitebophir) - the whiteboards
+- [ourcade/phaser3-typescript-parcel-template](https://github.com/ourcade/phaser3-typescript-parcel-template) - the template the original started from
 
 ## License
 
-This project is licensed under MIT.
-
-If you're using SkyOffice to power your virtual office or using our code in other projects, please consider [buy me a coffee](https://www.buymeacoffee.com/skyoffice). Thank you :)
+MIT, and it stays MIT. The copyright notice in [LICENSE](LICENSE) is the
+original author's and is kept as the licence requires - a fork does not get to
+drop it, whatever else changes.
