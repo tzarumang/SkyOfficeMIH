@@ -1,6 +1,6 @@
-import { FLOOR, Layout, Room, WALL, cellAt, isFloor } from './layout'
+import { FLOOR, Layout, Room, VOID, WALL, cellAt, isFloor } from './layout'
 import { Placement, doorways } from './furnish'
-import { STYLES, TILE, WALLS } from './vocabulary'
+import { STYLES, TILE, WALLS, WINDOWS } from './vocabulary'
 
 /**
  * What has to be true of every office, however the dice fell.
@@ -265,6 +265,32 @@ export function validate(
     fail(
       'a chair can be sat on',
       `${boxedIn.length} seat(s) cannot be walked to: ${boxedIn.slice(0, 3).join(', ')}`
+    )
+  }
+
+  // --- a window looks at the outdoors ---------------------------------------
+  //
+  // A window only reads as one when the outdoors is on the other side of the
+  // glass. Let into the wall between two stacked rooms it is a view of the sky
+  // hanging in the middle of the building. So from any tile of glass, walking
+  // up out of the wall it sits in has to reach the void - not the floor of the
+  // room above.
+  const windowGids = new Set(WINDOWS.flatMap((window) => window.parts.map((part) => part.gid)))
+  const indoorGlass: string[] = []
+  for (const placement of placements) {
+    if (!windowGids.has(placement.gid)) continue
+    let above = placement.ty
+    while (cellAt(layout, placement.tx, above) === WALL) above--
+    if (cellAt(layout, placement.tx, above) !== VOID) {
+      indoorGlass.push(`${placement.tx},${placement.ty}`)
+    }
+  }
+  if (indoorGlass.length > 0) {
+    fail(
+      'a window looks outside',
+      `${indoorGlass.length} window tile(s) face another room: ${indoorGlass
+        .slice(0, 3)
+        .join(', ')}`
     )
   }
 

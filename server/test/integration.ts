@@ -651,6 +651,9 @@ const HALL_SEAT_GIDS = new Set([2573, 2574])
 /** the desk halves of a bench, so a test can tell a desk from a partition */
 const DESK_GIDS = new Set([3039, 3040, 3041, 3055, 3056, 3057, 2585, 2586, 2587, 2590, 2591, 2592])
 
+/** both windows a wall can be given, every tile of glass */
+const WINDOW_GIDS = new Set([4130, 4131, 4146, 4147, 3644, 3645, 3660, 3661])
+
 function peerHostUnits() {
   console.log('\nWhere the signalling server is')
 
@@ -858,6 +861,32 @@ function generatedOfficeUnits() {
     return chairs.some((object: any) => HALL_SEAT_GIDS.has(object.gid & 0x1fffffff))
   })
   check('the corridor has somewhere to sit and wait', corridorHasSeating, true)
+
+  // A window shows the outdoors, so the only wall that can hold one is an
+  // outer wall of the building. The wall between two stacked rooms used to
+  // get one too, which hung a view of the sky between a lounge and whatever
+  // was above it.
+  let windowsSeen = 0
+  const windowsFaceOutside = [1, 6, 33, 4242].every((seed) => {
+    const { layout, map } = generateOffice({ seed })
+    const cell = (x: number, y: number) =>
+      x < 0 || y < 0 ? 0 : layout.cells[y * layout.width + x] ?? 0
+
+    return (map.layers as Array<{ name: string; objects?: any[] }>).every((layer) =>
+      (layer.objects ?? []).every((object: any) => {
+        if (!WINDOW_GIDS.has(object.gid & 0x1fffffff)) return true
+        windowsSeen++
+        // from the glass, up out of the wall it is set in: the outdoors (0),
+        // not the floor of a room above
+        const x = object.x / 32
+        let y = object.y / 32 - 1
+        while (cell(x, y) === 2) y--
+        return cell(x, y) === 0
+      })
+    )
+  })
+  check('a window is only let into an outer wall', windowsFaceOutside, true)
+  check('and there are still windows to look out of', windowsSeen > 0, true)
 
   // the spawn both the client and the server assume has to be standing room
   const spawnOnFloor = [1, 2, 3, 99].every((seed) => {

@@ -1,5 +1,5 @@
 import { Rng } from './rng'
-import { Layout, logoColumns, Room, styleKeyOf } from './layout'
+import { Layout, logoColumns, Room, styleKeyOf, TOP } from './layout'
 import { OfficeSpec } from '../../types/Office'
 import {
   BOOKCASE,
@@ -438,7 +438,15 @@ function trainingRoom(rng: Rng, room: Room): Placement[] {
     }
   }
 
-  out.push(...dressWalls(rng, room, [screenX - 1, screenX + SCREEN.width], { board: false }))
+  // No corner piece: the chair rows run wall to wall, so whatever stands in a
+  // corner stands on a seat - which is how a water cooler ended up planted on
+  // the back-row chair of the first training room drawn with one.
+  out.push(
+    ...dressWalls(rng, room, [screenX - 1, screenX + SCREEN.width], {
+      board: false,
+      corner: false,
+    })
+  )
   return out
 }
 
@@ -717,7 +725,8 @@ function fillRoom(rng: Rng, room: Room, placed: Placement[], limit: number): Pla
 
 /**
  * The things that stop a room being four walls and a floor: a window let into
- * the back wall, and something in whichever corner is still free.
+ * the back wall where that wall is an outer one, and something in whichever
+ * corner is still free.
  *
  * `taken` is the span of columns the room's own furniture claimed. The doorway
  * is off limits too - a water cooler pushed into a corner that happens to be
@@ -752,15 +761,22 @@ function dressWalls(
 
   // A window is let into the wall itself, across the rows the wall occupies.
   // It sits off to one side because the board is what goes in the middle.
-  const window = rng.pick(WINDOWS)
-  const windowX = room.ix0 + Math.max(1, Math.floor((room.ix1 - room.ix0) / 4) - 1)
-  if (
-    windowX + window.width - 1 <= room.ix1 &&
-    (!board || windowX + window.width <= boardColumn(room) - 1) &&
-    !spoken.some(([from, to]) => windowX <= to && windowX + window.width - 1 >= from)
-  ) {
-    out.push(...stamp(window, windowX, room.y0))
-    spoken.push([windowX, windowX + window.width - 1])
+  //
+  // Only a wall with the outdoors behind it can hold one. The rooms stack
+  // down from the top of the building, so every back wall but the topmost is
+  // the wall of the room above - and a window cut there is a view of the sky
+  // between two rooms that are both indoors.
+  if (room.y0 === TOP) {
+    const window = rng.pick(WINDOWS)
+    const windowX = room.ix0 + Math.max(1, Math.floor((room.ix1 - room.ix0) / 4) - 1)
+    if (
+      windowX + window.width - 1 <= room.ix1 &&
+      (!board || windowX + window.width <= boardColumn(room) - 1) &&
+      !spoken.some(([from, to]) => windowX <= to && windowX + window.width - 1 >= from)
+    ) {
+      out.push(...stamp(window, windowX, room.y0))
+      spoken.push([windowX, windowX + window.width - 1])
+    }
   }
 
   // A drinks counter, let into the wall the same way the window is. It cannot
