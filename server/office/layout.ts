@@ -96,7 +96,13 @@ const ROOM_BLOCK_LEFT = 5
 const ROOM_BLOCK_RIGHT = 19
 const ROOM_BLOCK_WIDTH = ROOM_BLOCK_RIGHT - ROOM_BLOCK_LEFT
 const CORRIDOR_RIGHT = 24
-const TOP = 1
+/**
+ * The row every column of rooms hangs from. A room whose back wall is on this
+ * row has the outdoors behind it; every other back wall is shared with the
+ * room above, which is what the furnisher needs to know before it cuts a
+ * window into one.
+ */
+export const TOP = 1
 
 /** wall-to-wall heights, from the three rooms down the left of the hand-drawn map */
 const ROOM_HEIGHTS: Record<Exclude<Archetype, 'open' | 'corridor'>, number> = {
