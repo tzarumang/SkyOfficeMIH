@@ -11,6 +11,16 @@ import { parsePeerHost } from '../../../types/PeerHost'
  * Point VITE_PEER_HOST at a self-hosted PeerServer to avoid all three. Unset,
  * behaviour is unchanged.
  */
+/**
+ * How long after losing the signalling broker before dialling it again.
+ *
+ * PeerJS never redials on its own: one dropped socket and the peer stays off
+ * the broker for good, still in the game and unreachable for every call. Long
+ * enough not to hammer a broker that is restarting, short enough that two
+ * people stood together are talking again before they give up and type.
+ */
+export const PEER_RECONNECT_DELAY_MS = 3000
+
 export function peerOptions(): PeerOptions | undefined {
   const configured = peerHost()
 

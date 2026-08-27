@@ -3,7 +3,7 @@ import store from '../stores'
 import { setMyStream, addVideoStream, removeVideoStream } from '../stores/ComputerStore'
 import phaserGame from '../PhaserGame'
 import Game from '../scenes/Game'
-import { peerOptions } from './peerConfig'
+import { PEER_RECONNECT_DELAY_MS, peerOptions } from './peerConfig'
 import { toScreenSharePeerId } from '../util'
 import { ItemType } from '../../../types/Items'
 
@@ -12,6 +12,8 @@ export default class ShareScreenManager {
   myStream?: MediaStream
   /** screen-share peer ids of the users currently at the same computer */
   private allowedPeers = new Set<string>()
+  /** whether the dialog is open, which is when this peer belongs on the broker */
+  private wantsBroker = false
 
   constructor(private userId: string) {
     const sanatizedId = toScreenSharePeerId(userId)
@@ -19,6 +21,17 @@ export default class ShareScreenManager {
     this.myPeer.on('error', (err) => {
       console.log('ShareScreenWebRTC err.type', err.type)
       console.error('ShareScreenWebRTC', err)
+    })
+
+    // The same broker registration the voice peer keeps alive, except that
+    // this one is dropped on purpose when the dialog closes - so it only
+    // redials while the dialog is open and the drop was not ours.
+    this.myPeer.on('disconnected', () => {
+      window.setTimeout(() => {
+        if (this.wantsBroker && !this.myPeer.destroyed && this.myPeer.disconnected) {
+          this.myPeer.reconnect()
+        }
+      }, PEER_RECONNECT_DELAY_MS)
     })
 
     this.myPeer.on('call', (call) => {
@@ -40,6 +53,7 @@ export default class ShareScreenManager {
   }
 
   onOpen(computerId: string) {
+    this.wantsBroker = true
     if (this.myPeer.disconnected) {
       this.myPeer.reconnect()
     }
@@ -56,6 +70,7 @@ export default class ShareScreenManager {
   }
 
   onClose() {
+    this.wantsBroker = false
     this.stopScreenShare(false)
     this.allowedPeers.clear()
     this.myPeer.disconnect()
