@@ -3,7 +3,7 @@ import Peer, { MediaConnection } from 'peerjs'
 import Network from '../services/Network'
 import store from '../stores'
 import { setVideoConnected } from '../stores/UserStore'
-import { peerOptions } from './peerConfig'
+import { PEER_RECONNECT_DELAY_MS, peerOptions } from './peerConfig'
 import { toPeerId } from '../util'
 
 /**
@@ -38,6 +38,23 @@ export default class WebRTC {
     this.myPeer.on('error', (err) => {
       console.log(err.type)
       console.error(err)
+    })
+
+    /**
+     * Being registered with the broker is what makes this player callable, and
+     * PeerJS never re-registers on its own: one dropped socket - a machine
+     * that slept, a network that blinked, a broker that restarted - and this
+     * client keeps walking around the office while every call to it comes
+     * back peer-unavailable. The room connection reconnects; the peer has to
+     * as well, and under the same id, which is what reconnect() preserves.
+     *
+     * A reconnect that fails surfaces as another 'disconnected', so this
+     * keeps trying for as long as the socket stays down, a pause apart.
+     */
+    this.myPeer.on('disconnected', () => {
+      window.setTimeout(() => {
+        if (!this.myPeer.destroyed && this.myPeer.disconnected) this.myPeer.reconnect()
+      }, PEER_RECONNECT_DELAY_MS)
     })
 
     // mute your own video stream (you don't want to hear yourself)
@@ -157,33 +174,41 @@ export default class WebRTC {
 
   // method to call a peer
   connectToNewUser(userId: string) {
-    if (this.myStream) {
-      const sanitizedId = toPeerId(userId)
-      if (!this.peers.has(sanitizedId)) {
-        console.log('calling', sanitizedId)
-        const call = this.myPeer.call(sanitizedId, this.myStream)
-        const video = document.createElement('video')
-        this.peers.set(sanitizedId, { call, video })
+    if (!this.myStream) return
 
-        call.on('stream', (userVideoStream) => {
-          this.addVideoStream(video, userVideoStream)
-        })
+    // Off the broker there is nobody to route the call, and PeerJS hands back
+    // undefined instead of a call to hang handlers on. The reconnect above is
+    // already working on it, and the game dials again on the next overlap, so
+    // a call not placed here is a call delayed rather than lost.
+    if (this.myPeer.disconnected || this.myPeer.destroyed) return
 
-        /**
-         * A call that never came to anything must not be remembered as one that
-         * did. While it sits in `peers` this side will not dial that peer
-         * again, so a single failure - refused, or lost on the way - is
-         * permanent for as long as the two of them stay put.
-         */
-        const forget = () => {
-          if (this.peers.get(sanitizedId)?.call === call) this.peers.delete(sanitizedId)
-        }
-        call.on('error', forget)
-        call.on('close', forget)
+    const sanitizedId = toPeerId(userId)
+    if (this.peers.has(sanitizedId)) return
 
-        // on close is triggered manually with deleteVideoStream()
-      }
+    console.log('calling', sanitizedId)
+    const call = this.myPeer.call(sanitizedId, this.myStream)
+    if (!call) return
+
+    const video = document.createElement('video')
+    this.peers.set(sanitizedId, { call, video })
+
+    call.on('stream', (userVideoStream) => {
+      this.addVideoStream(video, userVideoStream)
+    })
+
+    /**
+     * A call that never came to anything must not be remembered as one that
+     * did. While it sits in `peers` this side will not dial that peer
+     * again, so a single failure - refused, or lost on the way - is
+     * permanent for as long as the two of them stay put.
+     */
+    const forget = () => {
+      if (this.peers.get(sanitizedId)?.call === call) this.peers.delete(sanitizedId)
     }
+    call.on('error', forget)
+    call.on('close', forget)
+
+    // on close is triggered manually with deleteVideoStream()
   }
 
   // method to add new video stream to videoGrid div
