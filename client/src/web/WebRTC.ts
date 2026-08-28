@@ -4,6 +4,7 @@ import Network from '../services/Network'
 import store from '../stores'
 import { setVideoConnected } from '../stores/UserStore'
 import { PEER_RECONNECT_DELAY_MS, peerOptions } from './peerConfig'
+import { CAMERA_CONSTRAINTS, applyVideoBudget, videoBitrateFor } from './mediaConfig'
 import { toPeerId } from '../util'
 
 /**
@@ -28,6 +29,8 @@ export default class WebRTC {
   private network: Network
   /** peers we are currently close enough to talk to -> when that expires */
   private allowedPeers = new Map<string, number>()
+  /** whether the user has left their camera on, which the budget must respect */
+  private videoEnabled = true
 
   constructor(userId: string, network: Network) {
     const sanitizedId = toPeerId(userId)
@@ -83,6 +86,31 @@ export default class WebRTC {
     this.allowedPeers.delete(toPeerId(userId))
   }
 
+  /**
+   * Shares the outbound video budget out across every call currently open.
+   *
+   * This is a mesh: the same camera is encoded once per person standing with
+   * us, so what one call may spend depends on how many others there are. Both
+   * maps count - we send our camera whether we placed the call or answered it
+   * - and the split is redone whenever that number changes, which is why every
+   * add and every removal ends here.
+   *
+   * Cheap enough to run on each change: a handful of setParameters calls
+   * against connections that are already open, with no renegotiation.
+   */
+  private rebalanceVideoBudget() {
+    const calls = [...this.peers.values(), ...this.onCalledPeers.values()]
+    const bitrate = this.videoEnabled ? videoBitrateFor(calls.length) : null
+
+    if (this.videoEnabled && bitrate === null && calls.length > 0) {
+      console.warn(`${calls.length} calls open - dropping video, carrying audio only`)
+    }
+
+    for (const { call } of calls) {
+      void applyVideoBudget(call.peerConnection, bitrate)
+    }
+  }
+
   private isPeerAllowed(peerId: string) {
     const expiresAt = this.allowedPeers.get(peerId)
     if (expiresAt === undefined) return false
@@ -136,9 +164,13 @@ export default class WebRTC {
         call.answer(this.myStream)
         const video = document.createElement('video')
         this.onCalledPeers.set(call.peer, { call, video })
+        this.rebalanceVideoBudget()
 
         call.on('stream', (userVideoStream) => {
           this.addVideoStream(video, userVideoStream)
+          // the senders only carry encodings to cap once negotiation is done,
+          // which is what arriving here means
+          this.rebalanceVideoBudget()
         })
       }
       // on close is triggered manually with deleteOnCalledVideoStream()
@@ -156,10 +188,7 @@ export default class WebRTC {
   getUserMedia(alertOnError = true) {
     // ask the browser to get user media
     navigator.mediaDevices
-      ?.getUserMedia({
-        video: true,
-        audio: true,
-      })
+      ?.getUserMedia(CAMERA_CONSTRAINTS)
       .then((stream) => {
         this.myStream = stream
         this.addVideoStream(this.myVideo, this.myStream)
@@ -191,9 +220,13 @@ export default class WebRTC {
 
     const video = document.createElement('video')
     this.peers.set(sanitizedId, { call, video })
+    this.rebalanceVideoBudget()
 
     call.on('stream', (userVideoStream) => {
       this.addVideoStream(video, userVideoStream)
+      // the senders only carry encodings to cap once negotiation is done,
+      // which is what arriving here means
+      this.rebalanceVideoBudget()
     })
 
     /**
@@ -203,7 +236,11 @@ export default class WebRTC {
      * permanent for as long as the two of them stay put.
      */
     const forget = () => {
-      if (this.peers.get(sanitizedId)?.call === call) this.peers.delete(sanitizedId)
+      if (this.peers.get(sanitizedId)?.call === call) {
+        this.peers.delete(sanitizedId)
+        // one call fewer to divide the budget between
+        this.rebalanceVideoBudget()
+      }
     }
     call.on('error', forget)
     call.on('close', forget)
@@ -230,6 +267,7 @@ export default class WebRTC {
       peer?.call.close()
       peer?.video.remove()
       this.peers.delete(sanitizedId)
+      this.rebalanceVideoBudget()
     }
   }
 
@@ -242,6 +280,7 @@ export default class WebRTC {
       onCalledPeer?.call.close()
       onCalledPeer?.video.remove()
       this.onCalledPeers.delete(sanitizedId)
+      this.rebalanceVideoBudget()
     }
   }
 
@@ -265,14 +304,19 @@ export default class WebRTC {
     videoButton.innerText = 'Video off'
     videoButton.addEventListener('click', () => {
       if (this.myStream) {
-        const audioTrack = this.myStream.getVideoTracks()[0]
-        if (audioTrack.enabled) {
-          audioTrack.enabled = false
-          videoButton.innerText = 'Video on'
-        } else {
-          audioTrack.enabled = true
-          videoButton.innerText = 'Video off'
-        }
+        const videoTrack = this.myStream.getVideoTracks()[0]
+        this.videoEnabled = !videoTrack.enabled
+        videoTrack.enabled = this.videoEnabled
+        videoButton.innerText = this.videoEnabled ? 'Video off' : 'Video on'
+
+        /**
+         * `enabled = false` blanks the picture but keeps the encoder and the
+         * sender running, so turning your camera off went on costing very
+         * nearly what leaving it on did. Someone on a slow line turning it off
+         * to get the call back was doing almost nothing. Deactivating the
+         * sender is what actually hands the bandwidth back.
+         */
+        this.rebalanceVideoBudget()
       }
     })
     this.buttonGrid?.append(audioButton)

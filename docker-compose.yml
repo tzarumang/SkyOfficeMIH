@@ -48,6 +48,42 @@ services:
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PEER_PUBLIC_PORT:-9000}:9000"
 
+  # Media relay, for the calls that cannot be made peer to peer at all.
+  #
+  # Signalling only introduces two browsers; the audio and video then go
+  # straight between them, which works right up until neither side's network
+  # will accept an unsolicited packet. Symmetric NAT and carrier-grade NAT do
+  # exactly that, and between them they cover most mobile data and a good share
+  # of home ISPs. Those calls do not degrade, they never connect.
+  #
+  # Opt in with `docker compose --profile turn up`, because it is only useful
+  # once TURN_USERNAME and TURN_CREDENTIAL are set and its ports are actually
+  # reachable from the browsers - see .env.example.
+  coturn:
+    image: coturn/coturn:4.6.2-alpine
+    profiles: ["turn"]
+    restart: unless-stopped
+    command:
+      - --listening-port=3478
+      - --realm=${TURN_REALM:-skyoffice}
+      - --user=${TURN_USERNAME:-}:${TURN_CREDENTIAL:-}
+      # long-term credentials, so an unauthenticated stranger cannot use this
+      # to relay their own traffic
+      - --lt-cred-mech
+      - --fingerprint
+      - --no-cli
+      - --no-multicast-peers
+      # the range the relay hands out, kept narrow so it can be published
+      - --min-port=49160
+      - --max-port=49200
+      # what the relay tells peers to send to. Behind NAT it has no way to know
+      # its own public address, and without this it advertises the container's.
+      - --external-ip=${TURN_EXTERNAL_IP:-}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${TURN_PORT:-3478}:3478/udp"
+      - "${BIND_ADDRESS:-127.0.0.1}:${TURN_PORT:-3478}:3478/tcp"
+      - "${BIND_ADDRESS:-127.0.0.1}:49160-49200:49160-49200/udp"
+
   client:
     build:
       context: .
@@ -68,5 +104,11 @@ services:
       PEER_PATH: ${PEER_PATH:-/}
       # set to "false" when reaching peerjs over plain http
       PEER_SECURE: ${PEER_SECURE:-}
+      # Relay for peers whose networks will not hole-punch. Comma separated;
+      # offering both udp and tcp costs nothing and rescues the networks that
+      # block one of them. Empty means calls are peer to peer or not at all.
+      TURN_URL: ${TURN_URL:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${CLIENT_PORT:-8080}:80"

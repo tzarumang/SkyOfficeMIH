@@ -4,6 +4,11 @@ import { setMyStream, addVideoStream, removeVideoStream } from '../stores/Comput
 import phaserGame from '../PhaserGame'
 import Game from '../scenes/Game'
 import { PEER_RECONNECT_DELAY_MS, peerOptions } from './peerConfig'
+import {
+  SCREEN_SHARE_BITRATE_BPS,
+  SCREEN_SHARE_CONSTRAINTS,
+  applyVideoBudget,
+} from './mediaConfig'
 import { toScreenSharePeerId } from '../util'
 import { ItemType } from '../../../types/Items'
 
@@ -78,12 +83,8 @@ export default class ShareScreenManager {
 
 
   startScreenShare() {
-    // @ts-ignore
     navigator.mediaDevices
-      ?.getDisplayMedia({
-        video: true,
-        audio: true,
-      })
+      ?.getDisplayMedia(SCREEN_SHARE_CONSTRAINTS)
       .then((stream) => {
         // Detect when user clicks "Stop sharing" outside of our UI.
         // https://stackoverflow.com/a/25179198
@@ -129,7 +130,19 @@ export default class ShareScreenManager {
     this.allowedPeers.add(sanatizedId)
 
     if (!this.myStream) return
-    this.myPeer.call(sanatizedId, this.myStream)
+    const call = this.myPeer.call(sanatizedId, this.myStream)
+    if (!call) return
+
+    /**
+     * A shared screen is capped per call rather than out of a shared budget:
+     * only one person at a computer is usually sharing, and unlike the camera
+     * mesh the count here is the handful of people stood at that same
+     * computer. `maintain-resolution` because a shared screen that has gone
+     * soft is unreadable, where one that has gone jerky is merely annoying.
+     */
+    call.on('stream', () => {
+      void applyVideoBudget(call.peerConnection, SCREEN_SHARE_BITRATE_BPS, 'maintain-resolution')
+    })
   }
 
   onUserLeft(userId: string) {
