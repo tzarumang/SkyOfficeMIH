@@ -29,7 +29,13 @@ const JoystickWrapper = styled.div`
 `
 export const minimumScreenWidthSize = 650 //px
 
-const isSmallScreen = (smallScreenSize: number) => {
+/**
+ * Named `use` because it is one: it holds state and subscribes to resize.
+ * React tells a hook from an ordinary function by that prefix alone, and
+ * without it nothing stops a later caller putting this behind a condition
+ * and breaking the hook order.
+ */
+const useIsSmallScreen = (smallScreenSize: number) => {
   const [width, setWidth] = useState(window.innerWidth)
 
   useEffect(() => {
@@ -44,7 +50,7 @@ const isSmallScreen = (smallScreenSize: number) => {
 export default function MobileVirtualJoystick() {
   const showJoystick = useAppSelector((state) => state.user.showJoystick)
   const showChat = useAppSelector((state) => state.chat.showChat)
-  const hasSmallScreen = isSmallScreen(minimumScreenWidthSize)
+  const hasSmallScreen = useIsSmallScreen(minimumScreenWidthSize)
   const game = gameScene()
 
   useEffect(() => {}, [showJoystick, showChat])

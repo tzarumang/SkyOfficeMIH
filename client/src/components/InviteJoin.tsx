@@ -88,12 +88,18 @@ export function InviteJoin({
 
   // the lobby has to be connected before the room can be looked up
   useEffect(() => {
+    /**
+     * attempt() opens with setStage('joining'), which is a setState in an
+     * effect body and so one extra render before the request is even sent.
+     * Accepted rather than fixed: the alternative is restructuring how this
+     * component is triggered, and the invite path is the one flow with no UI
+     * test behind it. One render, not a loop.
+     */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (lobbyJoined) attempt(null)
     // deliberately only lobbyJoined: this fires once the lobby arrives, and
-    // listing `attempt` would re-run it on every render. Said in prose rather
-    // than as an eslint-disable, because the rule it used to name comes from
-    // eslint-plugin-react-hooks, which is not installed - so the directive was
-    // itself an error.
+    // listing `attempt` would re-run it on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lobbyJoined])
 
   const submitPassword = (event: React.FormEvent<HTMLFormElement>) => {

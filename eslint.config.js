@@ -15,6 +15,7 @@ const js = require('@eslint/js')
 const globals = require('globals')
 const tsPlugin = require('@typescript-eslint/eslint-plugin')
 const tsParser = require('@typescript-eslint/parser')
+const reactHooks = require('eslint-plugin-react-hooks')
 
 module.exports = [
   {
@@ -53,6 +54,19 @@ module.exports = [
         },
       ],
     },
+  },
+  {
+    /**
+     * The hook rules, on the client only - nothing else here renders.
+     *
+     * `recommended-latest` rather than the two classic rules, because it also
+     * carries the compiler set: purity, immutability, refs, set-state-in-render
+     * and the rest. Turning the whole thing on cost one suppression, which is a
+     * cheap price for having the others watching.
+     */
+    files: ['client/src/**/*.ts', 'client/src/**/*.tsx'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: { ...reactHooks.configs['recommended-latest'].rules },
   },
   {
     /**
