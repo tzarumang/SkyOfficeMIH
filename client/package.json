@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "resolutions": {
-    "@types/react": "^18.3.31"
+    "@types/react": "^19.2.18"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -24,8 +24,8 @@
     "immer": "^11.1.18",
     "peerjs": "^1.5.5",
     "phaser": "^3.90.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-joystick-component": "^6.2.1",
     "react-redux": "^9.3.0",
     "regenerator-runtime": "^0.14.1",
@@ -37,8 +37,8 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^22.20.1",
-    "@types/react": "^18.3.31",
-    "@types/react-dom": "^18.3.7",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "@types/styled-components": "^5.1.36",
     "typescript": "^5.9.3"
   }
