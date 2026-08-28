@@ -6,7 +6,7 @@ import Tooltip from '@mui/material/Tooltip'
 import IconButton from '@mui/material/IconButton'
 import InputBase from '@mui/material/InputBase'
 import InsertEmoticonIcon from '@mui/icons-material/InsertEmoticon'
-import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutlineOutlined'
 import CloseIcon from '@mui/icons-material/Close'
 
 import { gameScene } from '../gameHandle'

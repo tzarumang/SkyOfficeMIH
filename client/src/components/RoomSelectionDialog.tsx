@@ -7,7 +7,7 @@ import Tooltip from '@mui/material/Tooltip'
 import LinearProgress from '@mui/material/LinearProgress'
 import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutlineOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 
 import { CustomRoomTable } from './CustomRoomTable'

@@ -187,18 +187,20 @@ export const CreateRoomForm = () => {
           label="Password (optional)"
           onChange={handleChange('password')}
           color="secondary"
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton
-                  aria-label="toggle password visibility"
-                  onClick={() => setShowPassword(!showPassword)}
-                  edge="end"
-                >
-                  {showPassword ? <VisibilityOff /> : <Visibility />}
-                </IconButton>
-              </InputAdornment>
-            ),
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label="toggle password visibility"
+                    onClick={() => setShowPassword(!showPassword)}
+                    edge="end"
+                  >
+                    {showPassword ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            },
           }}
         />
       </Column>
@@ -242,7 +244,7 @@ export const CreateRoomForm = () => {
                   size="small"
                   value={office[field.key]}
                   helperText={field.hint}
-                  inputProps={{ min: 0, max: field.max }}
+                  slotProps={{ htmlInput: { min: 0, max: field.max } }}
                   onChange={(event) => {
                     const asked = Math.floor(Number(event.target.value))
                     const count = Number.isFinite(asked)
