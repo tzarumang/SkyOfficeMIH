@@ -9,9 +9,6 @@
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
-  "resolutions": {
-    "@types/react": "^19.2.18"
-  },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
@@ -30,7 +27,7 @@
     "react-redux": "^9.3.0",
     "regenerator-runtime": "^0.14.1",
     "sass": "^1.103.1",
-    "styled-components": "^5.3.11",
+    "styled-components": "^6.5.3",
     "swiper": "^8.4.7",
     "vite": "^8.2.2"
   },
@@ -39,7 +36,6 @@
     "@types/node": "^22.20.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "@types/styled-components": "^5.1.36",
     "typescript": "^5.9.3"
   }
 }
