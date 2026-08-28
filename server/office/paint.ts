@@ -45,7 +45,9 @@ export function paint(layout: Layout, placements: Placement[], tilesets: unknown
   const ground = paintGround(layout)
 
   let nextObjectId = 1
-  const objectLayers = new Map<string, unknown[]>(OBJECT_LAYERS.map((name) => [name, []]))
+  const objectLayers = new Map<string, unknown[]>(
+    OBJECT_LAYERS.map((name): [string, unknown[]] => [name, []])
+  )
 
   for (const placement of placements) {
     const objects = objectLayers.get(placement.layer)
