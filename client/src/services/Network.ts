@@ -1,5 +1,5 @@
 import { toPeerId } from '../util'
-import { Client, Room } from 'colyseus.js'
+import { Client, Room, getStateCallbacks } from 'colyseus.js'
 import { IComputer, IOfficeState, IPlayer, IWhiteboard } from '../../../types/IOfficeState'
 import { Message } from '../../../types/Messages'
 import { IRoomData, RoomType } from '../../../types/Rooms'
@@ -29,6 +29,18 @@ import { serverUrl } from '../runtimeConfig'
  * room has to be told all of it about everybody already in it.
  */
 const CATCH_UP_FIELDS = ['avatar', 'anim', 'readyToConnect', 'videoConnected'] as const
+
+/** every replicated field of a player, which is what onChange used to report */
+const PLAYER_FIELDS = [
+  'name',
+  'x',
+  'y',
+  'anim',
+  'avatar',
+  'pet',
+  'readyToConnect',
+  'videoConnected',
+] as const
 
 export default class Network {
   private endpoint: string
@@ -202,46 +214,63 @@ export default class Network {
     store.dispatch(setSessionId(this.room.sessionId))
     this.webRTC = new WebRTC(this.mySessionId, this)
 
+    /**
+     * Schema 3 moved the state callbacks off the state itself and behind this
+     * proxy - `state.players.onAdd = fn` is now `$(state).players.onAdd(fn)`.
+     */
+    const $ = getStateCallbacks(this.room)
+
     // new instance added to the players MapSchema
-    this.room.state.players.onAdd = (player: IPlayer, key: string) => {
+    $(this.room.state).players.onAdd((player: IPlayer, key: string) => {
       if (key === this.mySessionId) return
 
-      // track changes on every child object inside the players MapSchema
-      player.onChange = (changes) => {
-        changes.forEach((change) => {
-          const { field, value } = change
-          phaserEvents.emit(Event.PLAYER_UPDATED, field, value, key)
+      /**
+       * Track changes on every child object inside the players MapSchema.
+       *
+       * onChange no longer says *what* changed, so each replicated field is
+       * listened to by name and reports itself. `false` keeps the old
+       * behaviour of firing only on a change: listen() would otherwise fire
+       * once on attach with whatever the field already holds, and announcing
+       * a player is the catch-up path's job, not this one's.
+       */
+      for (const field of PLAYER_FIELDS) {
+        $(player).listen(
+          field,
+          (value) => {
+            phaserEvents.emit(Event.PLAYER_UPDATED, field, value, key)
 
-          // when a new player finished setting up player name
-          if (field === 'name' && value !== '') {
-            this.announcePlayer(player, key, { arriving: true })
-          }
-        })
+            // when a new player finished setting up player name
+            if (field === 'name' && value !== '') {
+              this.announcePlayer(player, key, { arriving: true })
+            }
+          },
+          false
+        )
       }
-    }
+    })
 
     // an instance removed from the players MapSchema
-    this.room.state.players.onRemove = (player: IPlayer, key: string) => {
+    $(this.room.state).players.onRemove((player: IPlayer, key: string) => {
       phaserEvents.emit(Event.PLAYER_LEFT, key)
       this.webRTC?.deleteVideoStream(key)
       this.webRTC?.deleteOnCalledVideoStream(key)
       store.dispatch(pushPlayerLeftMessage({ name: player.name, place: placeName() }))
       store.dispatch(removePlayerNameMap(key))
-    }
+    })
 
     // new instance added to the computers MapSchema
-    this.room.state.computers.onAdd = (computer: IComputer, key: string) => {
+    $(this.room.state).computers.onAdd((computer: IComputer, key: string) => {
       // track changes on every child object's connectedUser
-      computer.connectedUser.onAdd = (item, index) => {
+      $(computer).connectedUser.onAdd((item) => {
         phaserEvents.emit(Event.ITEM_USER_ADDED, item, key, ItemType.COMPUTER)
-      }
-      computer.connectedUser.onRemove = (item, index) => {
+      })
+      $(computer).connectedUser.onRemove((item) => {
         phaserEvents.emit(Event.ITEM_USER_REMOVED, item, key, ItemType.COMPUTER)
-      }
-    }
+      })
+    })
 
     // new instance added to the whiteboards MapSchema
-    this.room.state.whiteboards.onAdd = (whiteboard: IWhiteboard, key: string) => {
+    $(this.room.state).whiteboards.onAdd((whiteboard: IWhiteboard, key: string) => {
       store.dispatch(
         setWhiteboardUrls({
           whiteboardId: key,
@@ -249,18 +278,18 @@ export default class Network {
         })
       )
       // track changes on every child object's connectedUser
-      whiteboard.connectedUser.onAdd = (item, index) => {
+      $(whiteboard).connectedUser.onAdd((item) => {
         phaserEvents.emit(Event.ITEM_USER_ADDED, item, key, ItemType.WHITEBOARD)
-      }
-      whiteboard.connectedUser.onRemove = (item, index) => {
+      })
+      $(whiteboard).connectedUser.onRemove((item) => {
         phaserEvents.emit(Event.ITEM_USER_REMOVED, item, key, ItemType.WHITEBOARD)
-      }
-    }
+      })
+    })
 
     // new instance added to the chatMessages ArraySchema
-    this.room.state.chatMessages.onAdd = (item, index) => {
+    $(this.room.state).chatMessages.onAdd((item) => {
       store.dispatch(pushChatMessage(item))
-    }
+    })
 
     // when the server sends room data
     this.room.onMessage(Message.SEND_ROOM_DATA, (content) => {

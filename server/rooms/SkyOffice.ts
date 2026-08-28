@@ -1,6 +1,5 @@
-import { IncomingMessage } from 'http'
 import bcrypt from 'bcrypt'
-import { Room, Client, ServerError } from 'colyseus'
+import { Room, Client, ServerError, AuthContext } from '@colyseus/core'
 import { Dispatcher } from '@colyseus/command'
 import { Player, OfficeState, Computer, Whiteboard, ChatMessage, Roomba } from './schema/OfficeState'
 import { Message } from '../../types/Messages'
@@ -56,11 +55,18 @@ const CHAT_BURST = 5
 const PASSWORD_ATTEMPTS_PER_SECOND = 1 / 60
 const PASSWORD_ATTEMPT_BURST = 5
 
-/** best effort origin for throttling; a reverse proxy puts the real ip here */
-function clientAddress(request?: IncomingMessage) {
-  const forwarded = request?.headers['x-forwarded-for']
+/**
+ * Best effort origin for throttling; a reverse proxy puts the real ip here.
+ *
+ * 0.16 hands onAuth an AuthContext rather than the raw request, and resolves
+ * an `ip` of its own - but x-forwarded-for is still read first, because that
+ * is the address this deployment is proxied behind.
+ */
+function clientAddress(context?: AuthContext) {
+  const forwarded = context?.headers?.['x-forwarded-for']
   const first = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0]
-  return first?.trim() || request?.socket?.remoteAddress || 'unknown'
+  const ip = Array.isArray(context?.ip) ? context?.ip[0] : context?.ip
+  return first?.trim() || ip || context?.req?.socket?.remoteAddress || 'unknown'
 }
 
 export class SkyOffice extends Room<OfficeState> {
@@ -521,9 +527,9 @@ export class SkyOffice extends Room<OfficeState> {
     return this.office.hasLineOfSight(player, box)
   }
 
-  async onAuth(client: Client, options: { password: string | null }, request?: IncomingMessage) {
+  async onAuth(client: Client, options: { password: string | null }, context: AuthContext) {
     if (this.password) {
-      const origin = clientAddress(request)
+      const origin = clientAddress(context)
 
       // Checked before the compare: bcrypt at cost 10 is deliberately slow, so
       // an unthrottled guessing loop is both a brute force and a cheap way to
