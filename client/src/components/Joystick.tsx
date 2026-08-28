@@ -17,7 +17,7 @@ interface Props {
 }
 
 const angleToDirections = (angle: number): Direction => {
-  let outObj: Direction = {
+  const outObj: Direction = {
     left: false,
     right: false,
     up: false,
@@ -71,11 +71,11 @@ const JoystickItem = (props: Props) => {
         const y1 = event.y ?? 0
         const x2 = event.x ?? 0
         const y2 = 0
-        var deltaX = x2 - x1 // distance between joystick and center
-        var deltaY = y2 - y1 // distance between joystick and center
-        var rad = Math.atan2(deltaY, deltaX) // In radians
-        var deg = (rad * 180) / Math.PI // In degrees
-        var direction = angleToDirections(deg) // Convert degrees to direction
+        const deltaX = x2 - x1 // distance between joystick and center
+        const deltaY = y2 - y1 // distance between joystick and center
+        const rad = Math.atan2(deltaY, deltaX) // In radians
+        const deg = (rad * 180) / Math.PI // In degrees
+        const direction = angleToDirections(deg) // Convert degrees to direction
         props.onDirectionChange({ isMoving: true, direction })
       }}
     />

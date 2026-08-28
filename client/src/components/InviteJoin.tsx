@@ -89,7 +89,11 @@ export function InviteJoin({
   // the lobby has to be connected before the room can be looked up
   useEffect(() => {
     if (lobbyJoined) attempt(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // deliberately only lobbyJoined: this fires once the lobby arrives, and
+    // listing `attempt` would re-run it on every render. Said in prose rather
+    // than as an eslint-disable, because the rule it used to name comes from
+    // eslint-plugin-react-hooks, which is not installed - so the directive was
+    // itself an error.
   }, [lobbyJoined])
 
   const submitPassword = (event: React.FormEvent<HTMLFormElement>) => {

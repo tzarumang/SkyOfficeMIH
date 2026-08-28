@@ -205,7 +205,7 @@ export default class WebRTC {
         store.dispatch(setVideoConnected(true))
         this.network.videoConnected()
       })
-      .catch((error) => {
+      .catch(() => {
         if (alertOnError) window.alert('No webcam or microphone found, or permission is blocked')
       })
   }
