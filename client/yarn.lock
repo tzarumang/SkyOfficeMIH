@@ -94,17 +94,17 @@
   dependencies:
     "@babel/types" "^7.29.8"
 
-"@babel/runtime@^7.0.0", "@babel/runtime@^7.5.5", "@babel/runtime@^7.8.7":
+"@babel/runtime@^7.12.5", "@babel/runtime@^7.18.3", "@babel/runtime@^7.29.7":
+  version "7.29.7"
+  resolved "https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.29.7.tgz#12022450c45a4da6d8d8287b18a4ff2ddb23f768"
+  integrity sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==
+
+"@babel/runtime@^7.5.5", "@babel/runtime@^7.8.7":
   version "7.17.9"
   resolved "https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.17.9.tgz#d19fbf802d01a8cb6cf053a64e472d42c434ba72"
   integrity sha512-lSiBBvodq29uShpWGNbgFdKYNiFDo5/HIYsaCEY9ff4sb10x9jizo2+pRrSyF4jKZCXqgzuqBOQKbUm90gQwJg==
   dependencies:
     regenerator-runtime "^0.13.4"
-
-"@babel/runtime@^7.12.5", "@babel/runtime@^7.18.3", "@babel/runtime@^7.29.7":
-  version "7.29.7"
-  resolved "https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.29.7.tgz#12022450c45a4da6d8d8287b18a4ff2ddb23f768"
-  integrity sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==
 
 "@babel/template@^7.29.7":
   version "7.29.7"
@@ -192,6 +192,11 @@
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/@csstools/css-tokenizer/-/css-tokenizer-4.0.0.tgz#798a33950d11226a0ebb6acafa60f5594424967f"
   integrity sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==
+
+"@emoji-mart/data@^1.2.1":
+  version "1.2.1"
+  resolved "https://registry.yarnpkg.com/@emoji-mart/data/-/data-1.2.1.tgz#0ad70c662e3bc603e23e7d98413bd1e64c4fcb6c"
+  integrity sha512-no2pQMWiBy6gpBEiqGeU77/bFejDqUTRY7KX+0+iur13op3bqUsXdnwoZs6Xb1zbv0gAj5VvS1PWoUUckSr5Dw==
 
 "@emotion/babel-plugin@^11.13.5":
   version "11.13.5"
@@ -944,13 +949,10 @@ dom-helpers@^5.0.1:
     "@babel/runtime" "^7.8.7"
     csstype "^3.0.2"
 
-emoji-mart@^3.0.1:
-  version "3.0.1"
-  resolved "https://registry.yarnpkg.com/emoji-mart/-/emoji-mart-3.0.1.tgz#9ce86706e02aea0506345f98464814a662ca54c6"
-  integrity sha512-sxpmMKxqLvcscu6mFn9ITHeZNkGzIvD0BSNFE/LJESPbCA8s1jM6bCDPjWbV31xHq7JXaxgpHxLB54RCbBZSlg==
-  dependencies:
-    "@babel/runtime" "^7.0.0"
-    prop-types "^15.6.0"
+emoji-mart@^5.6.0:
+  version "5.6.0"
+  resolved "https://registry.yarnpkg.com/emoji-mart/-/emoji-mart-5.6.0.tgz#71b3ed0091d3e8c68487b240d9d6d9a73c27f023"
+  integrity sha512-eJp3QRe79pjwa+duv+n7+5YsNhRcMl812EcFVwrnRvYKoNPoQb5qxU8DG6Bgwji0akHdp6D4Ln6tYLG58MFSow==
 
 entities@^8.0.0:
   version "8.0.0"
@@ -1375,7 +1377,7 @@ postcss@^8.5.26:
     picocolors "^1.1.1"
     source-map-js "^1.2.1"
 
-prop-types@^15.6.0, prop-types@^15.6.2, prop-types@^15.8.1:
+prop-types@^15.6.2, prop-types@^15.8.1:
   version "15.8.1"
   resolved "https://registry.yarnpkg.com/prop-types/-/prop-types-15.8.1.tgz#67d87bf1a694f48435cf332c24af10214a3140b5"
   integrity sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==
