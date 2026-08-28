@@ -145,6 +145,31 @@ function matchmakeStatus(origin?: string) {
   })
 }
 
+/** a plain GET against the express side of the server */
+function httpGet(path: string) {
+  return new Promise<{ status: number; contentType: string; body: string }>(
+    (resolve, reject) => {
+      const request = http.request(
+        { host: '127.0.0.1', port: Number(process.env.PORT), path, method: 'GET' },
+        (response) => {
+          let body = ''
+          response.setEncoding('utf8')
+          response.on('data', (chunk) => (body += chunk))
+          response.on('end', () =>
+            resolve({
+              status: response.statusCode || 0,
+              contentType: String(response.headers['content-type'] || ''),
+              body,
+            })
+          )
+        }
+      )
+      request.on('error', reject)
+      request.end()
+    }
+  )
+}
+
 async function matchmakingOriginTests() {
   console.log('\nMatchmaking origins')
 
@@ -1336,6 +1361,37 @@ async function logoTests() {
   await reopened.leave()
 }
 
+/**
+ * The express routes, which nothing covered until express 5 made that a
+ * problem: the suite drove Colyseus and the raw matchmaking listener, so an
+ * express upgrade could only be checked by hand. path-to-regexp 8 is the
+ * part worth pinning down - `/office/map/:id.json` puts a parameter and a
+ * literal extension next to each other, which is exactly the shape its
+ * rewrite changed.
+ */
+async function httpRouteTests() {
+  console.log('\nHTTP routes')
+
+  const health = await httpGet('/health')
+  check('health answers', [health.status, JSON.parse(health.body)], [200, { status: 'ok' }])
+
+  const version = await httpGet('/office/version')
+  check('a drawing version is served', version.status, 200)
+  check('and it is a non-empty string', typeof JSON.parse(version.body).version, 'string')
+
+  // the id has to come back without the .json the route ends in
+  const drawn = await httpGet('/office/map/52242-1-1-5-10-1-1.json')
+  check('a generated office is drawn', drawn.status, 200)
+  check('and it is a tiled map', typeof JSON.parse(drawn.body).layers, 'object')
+
+  const nonsense = await httpGet('/office/map/not-an-office-id.json')
+  check('a malformed office id is refused', nonsense.status, 400)
+
+  // mounted routers are the other thing an express major tends to break
+  const monitor = await httpGet('/colyseus/api')
+  check('the colyseus monitor is mounted', monitor.status, 200)
+}
+
 async function main() {
   rateLimiterUnits()
   await whoIsAlreadyHereTests()
@@ -1346,6 +1402,7 @@ async function main() {
   logoUnits()
   await sleep(700)
   await matchmakingOriginTests()
+  await httpRouteTests()
   await officeLifetimeTests()
   await chatPersistenceTests()
   await petTests()
