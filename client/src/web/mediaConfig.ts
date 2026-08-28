@@ -81,6 +81,47 @@ export function videoBitrateFor(callCount: number): number | null {
 }
 
 /**
+ * Runs something once the connection is actually negotiated.
+ *
+ * A cap can only be set on senders that carry encodings, which they do not
+ * until negotiation finishes, so it has to wait for a signal that the call is
+ * up. The camera mesh could hang that on the far side's stream arriving,
+ * because there both ends answer with one. A screen share cannot: the
+ * receiving end answers with no media at all, so `stream` never fires on the
+ * sender and the cap it was waiting behind was never applied - the shared
+ * screen, the most expensive thing here, was the one stream going out
+ * uncapped.
+ *
+ * Connection state is the signal that holds either way, and it is already
+ * 'connected' by the time some callers reach this, hence the check before the
+ * listener.
+ */
+export function whenConnected(
+  connection: RTCPeerConnection | undefined | null,
+  run: () => void
+) {
+  if (!connection) return
+
+  if (connection.connectionState === 'connected') {
+    run()
+    return
+  }
+
+  const onChange = () => {
+    const state = connection.connectionState
+    if (state === 'connected') {
+      connection.removeEventListener('connectionstatechange', onChange)
+      run()
+    } else if (state === 'failed' || state === 'closed') {
+      // nothing left to cap, and nothing that would ever fire again
+      connection.removeEventListener('connectionstatechange', onChange)
+    }
+  }
+
+  connection.addEventListener('connectionstatechange', onChange)
+}
+
+/**
  * Caps what a peer connection may spend on video.
  *
  * `maxBitrate` is the cap itself; `active` is how video is dropped without

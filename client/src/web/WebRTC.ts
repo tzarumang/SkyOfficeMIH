@@ -4,7 +4,12 @@ import Network from '../services/Network'
 import store from '../stores'
 import { setVideoConnected } from '../stores/UserStore'
 import { PEER_RECONNECT_DELAY_MS, peerOptions } from './peerConfig'
-import { CAMERA_CONSTRAINTS, applyVideoBudget, videoBitrateFor } from './mediaConfig'
+import {
+  CAMERA_CONSTRAINTS,
+  applyVideoBudget,
+  videoBitrateFor,
+  whenConnected,
+} from './mediaConfig'
 import { toPeerId } from '../util'
 
 /**
@@ -166,6 +171,10 @@ export default class WebRTC {
         this.onCalledPeers.set(call.peer, { call, video })
         this.rebalanceVideoBudget()
 
+        // answering without a camera sends nothing back, so the cap cannot
+        // wait on a stream that will never arrive
+        whenConnected(call.peerConnection, () => this.rebalanceVideoBudget())
+
         call.on('stream', (userVideoStream) => {
           this.addVideoStream(video, userVideoStream)
           // the senders only carry encodings to cap once negotiation is done,
@@ -221,6 +230,10 @@ export default class WebRTC {
     const video = document.createElement('video')
     this.peers.set(sanitizedId, { call, video })
     this.rebalanceVideoBudget()
+
+    // the far side may answer without a camera of its own, in which case no
+    // stream ever arrives here and only this applies the cap
+    whenConnected(call.peerConnection, () => this.rebalanceVideoBudget())
 
     call.on('stream', (userVideoStream) => {
       this.addVideoStream(video, userVideoStream)

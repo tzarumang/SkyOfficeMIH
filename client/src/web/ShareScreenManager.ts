@@ -7,6 +7,7 @@ import {
   SCREEN_SHARE_BITRATE_BPS,
   SCREEN_SHARE_CONSTRAINTS,
   applyVideoBudget,
+  whenConnected,
 } from './mediaConfig'
 import { toScreenSharePeerId } from '../util'
 import { ItemType } from '../../../types/Items'
@@ -140,8 +141,11 @@ export default class ShareScreenManager {
      * mesh the count here is the handful of people stood at that same
      * computer. `maintain-resolution` because a shared screen that has gone
      * soft is unreadable, where one that has gone jerky is merely annoying.
+     *
+     * Hung on the connection rather than on a stream, because the far end
+     * answers a screen share with no media of its own - see whenConnected.
      */
-    call.on('stream', () => {
+    whenConnected(call.peerConnection, () => {
       void applyVideoBudget(call.peerConnection, SCREEN_SHARE_BITRATE_BPS, 'maintain-resolution')
     })
   }
