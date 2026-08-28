@@ -39,7 +39,14 @@ jobs:
         run: yarn build
         working-directory: client
 
-      - name: Test
+      # The client half: pure logic only - the ICE and bitrate rules, the id
+      # encoding, the redux slices. Everything that needs a canvas or a real
+      # peer is still checked by hand.
+      - name: Test client
+        run: yarn test
+        working-directory: client
+
+      - name: Test server
         run: yarn test
 
   audit:

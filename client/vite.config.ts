@@ -51,6 +51,15 @@ function pruneEditorSources(): Plugin {
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), pruneEditorSources()],
+  test: {
+    /**
+     * jsdom because the modules under test reach for browser things as they
+     * load - peerConfig reads window.__SKYOFFICE_CONFIG__, and UserStore sizes
+     * the joystick from window.innerWidth while its slice is being built.
+     */
+    environment: 'jsdom',
+    include: ['src/**/*.test.ts'],
+  },
   css: {
     preprocessorOptions: {
       // Vite still reaches for Dart Sass's legacy JS API by default, which is
