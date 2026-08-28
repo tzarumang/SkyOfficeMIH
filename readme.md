@@ -17,24 +17,33 @@ Works in desktop browsers. Mobile browsers are not supported.
 
 ## Built with
 
-- [Phaser](https://github.com/photonstorm/phaser) 3.90 - game engine
-- [Colyseus](https://github.com/colyseus/colyseus) 0.14 - authoritative WebSocket server
-- [React](https://github.com/facebook/react) 18 and [Redux Toolkit](https://github.com/reduxjs/redux-toolkit) - the interface over the game
+- [Phaser](https://github.com/photonstorm/phaser) 4.2 - game engine
+- [Colyseus](https://github.com/colyseus/colyseus) 0.16 - authoritative WebSocket server
+- [React](https://github.com/facebook/react) 19 and [Redux Toolkit](https://github.com/reduxjs/redux-toolkit) - the interface over the game
 - [PeerJS](https://github.com/peers/peerjs) 1.5 - WebRTC for video and screen sharing
 - [TypeScript](https://github.com/microsoft/TypeScript) on both sides, sharing the `types/` folder
 
-### Two package trees, one Phaser
+### Two package trees, and Phaser is in only one
 
 The server and the client install separately - `package.json` at the root, and
-`client/package.json` - and **both** declare Phaser. That looks redundant and is
-not: `types/` is shared by the two sides, and `types/KeyboardState.ts` imports
-Phaser. Being outside `client/`, it resolves against the root `node_modules`
-rather than the client's.
+`client/package.json`. Phaser is declared **only** by the client, and the server
+tree must stay that way: it is a 145 MB browser engine that the server has no
+use for, and the root `dependencies` are what the production image ships.
 
-So the two declarations have to be kept at the same version. They drifted once,
-with the client on 3.90 and the root left at 3.55, which meant the client
-typecheck was reading two different sets of Phaser types at the same time.
-**If you upgrade Phaser, upgrade it in both.**
+That costs one rule. Nothing under `types/` may import Phaser. `types/` is
+shared by both sides and sits outside `client/`, so an import there resolves
+against the root `node_modules` instead of the client's - which would put Phaser
+back in the server tree, and would load two different sets of Phaser types into
+the client typecheck at once if the versions ever drifted. Both have happened
+before. Client-only types belong in `client/src/types/`, where
+`KeyboardState.ts` now lives.
+
+The same reasoning governs the rest of the root `dependencies`. Everything the
+compiled server does not `require` at runtime belongs in `devDependencies` -
+the image is built with the full tree and then reinstalled with `--production`,
+so a build-time or test-only package placed in `dependencies` is carried into
+the runtime image for nothing. TypeScript and `colyseus.js` are there for
+`yarn build` and the integration test respectively, and are declared as dev.
 
 ## What is in it
 

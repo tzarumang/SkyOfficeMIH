@@ -13,7 +13,7 @@ import store from '../stores'
 import { pushPlayerJoinedMessage } from '../stores/ChatStore'
 import { placeName } from '../placeName'
 import { ITEM_SPECS } from '../../../types/Items'
-import { NavKeys } from '../../../types/KeyboardState'
+import { NavKeys } from '../types/KeyboardState'
 import { JoystickMovement } from '../components/Joystick'
 
 /**
