@@ -28,7 +28,7 @@ import { ensureLogoTexture } from '../logo/logoFactory'
 
 import store from '../stores'
 import { setFocused, setShowChat } from '../stores/ChatStore'
-import { NavKeys, Keyboard } from '../../../types/KeyboardState'
+import { NavKeys, Keyboard } from '../types/KeyboardState'
 
 /** custom property set on the object in Tiled */
 function readProperty(object: Phaser.Types.Tilemaps.TiledObject, name: string) {

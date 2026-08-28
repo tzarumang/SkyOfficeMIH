@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import MyPlayer from './MyPlayer'
 import { PlayerBehavior } from '../../../types/PlayerBehavior'
 import Item from '../items/Item'
-import { NavKeys } from '../../../types/KeyboardState'
+import { NavKeys } from '../types/KeyboardState'
 export default class PlayerSelector extends Phaser.GameObjects.Zone {
   selectedItem?: Item
 
