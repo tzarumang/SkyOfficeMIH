@@ -13,6 +13,9 @@ export interface RuntimeConfig {
   peerPort?: string
   peerPath?: string
   peerSecure?: string
+  turnUrl?: string
+  turnUsername?: string
+  turnCredential?: string
 }
 
 declare global {
@@ -49,4 +52,17 @@ export function peerPath() {
 
 export function peerSecure() {
   return setting('peerSecure', import.meta.env.VITE_PEER_SECURE)
+}
+
+/** comma separated, e.g. turn:turn.example.com:3478?transport=udp,...tcp */
+export function turnUrl() {
+  return setting('turnUrl', import.meta.env.VITE_TURN_URL)
+}
+
+export function turnUsername() {
+  return setting('turnUsername', import.meta.env.VITE_TURN_USERNAME)
+}
+
+export function turnCredential() {
+  return setting('turnCredential', import.meta.env.VITE_TURN_CREDENTIAL)
 }

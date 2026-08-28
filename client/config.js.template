@@ -4,4 +4,7 @@ window.__SKYOFFICE_CONFIG__ = {
   peerPort: '${PEER_PORT}',
   peerPath: '${PEER_PATH}',
   peerSecure: '${PEER_SECURE}',
+  turnUrl: '${TURN_URL}',
+  turnUsername: '${TURN_USERNAME}',
+  turnCredential: '${TURN_CREDENTIAL}',
 }
