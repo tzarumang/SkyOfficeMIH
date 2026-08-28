@@ -16,10 +16,31 @@ import { ITEM_SPECS } from '../../../types/Items'
 import { NavKeys } from '../../../types/KeyboardState'
 import { JoystickMovement } from '../components/Joystick'
 
+/**
+ * How often a walking player's position goes on the wire, in milliseconds.
+ *
+ * This used to be every frame - sixty messages a second for as long as
+ * somebody held a key down - which is far more than anyone can see. Other
+ * clients do not draw what arrives anyway: OtherPlayer eases towards the last
+ * position it was given rather than snapping to it, so between updates it is
+ * already inventing the intervening motion, and at twenty a second it invents
+ * two frames' worth instead of none.
+ *
+ * The saving is the point. This traffic shares a connection with the voice
+ * calls, and on a slow uplink sixty position updates a second is bandwidth
+ * taken from the thing people actually notice. The server is comfortable
+ * either way - it allows 120 messages a second and refills a movement budget
+ * at 600 px/s against a player who moves at 200 - so this is purely about
+ * leaving room for everything else.
+ */
+const MOVEMENT_UPDATE_MS = 50
+
 export default class MyPlayer extends Player {
   private playContainerBody: Phaser.Physics.Arcade.Body
   private chairOnSit?: Chair
   public joystickMovement?: JoystickMovement
+  private lastMovementSentAt = 0
+  private lastSentAnimKey = ''
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -63,6 +84,32 @@ export default class MyPlayer extends Player {
 
   handleJoystickMovement(movement: JoystickMovement) {
     this.joystickMovement = movement
+  }
+
+  /**
+   * Puts this player's position on the wire, at most every
+   * MOVEMENT_UPDATE_MS while they are walking.
+   *
+   * Turning is exempt from the interval. A change of direction is the one
+   * thing the receiving end cannot invent - it eases towards wherever it was
+   * last told, so it would keep walking the old way until the next tick - and
+   * turns are rare enough that sending them at once costs nothing.
+   *
+   * `force` is for the moments that are not a step at all: sitting down,
+   * standing up, and coming to a halt. Those carry the position everyone else
+   * will hold until the player moves again, so they are never dropped - and
+   * the halt is what makes the throttle safe, since it always lands the true
+   * final position after the last interval was skipped.
+   */
+  private sendMovement(network: Network, force = false) {
+    const now = this.scene.time.now
+    const turned = this.currentAnimKey !== this.lastSentAnimKey
+
+    if (!force && !turned && now - this.lastMovementSentAt < MOVEMENT_UPDATE_MS) return
+
+    this.lastMovementSentAt = now
+    this.lastSentAnimKey = this.currentAnimKey
+    network.updatePlayer(this.x, this.y, this.currentAnimKey)
   }
 
   update(
@@ -121,7 +168,7 @@ export default class MyPlayer extends Player {
                 playerSelector.setPosition(0, 0)
               }
               // send new location and anim to server
-              network.updatePlayer(this.x, this.y, this.currentAnimKey)
+              this.sendMovement(network, true)
             },
             loop: false,
           })
@@ -167,7 +214,7 @@ export default class MyPlayer extends Player {
         this.playContainerBody.velocity.setLength(speed)
 
         // update animation according to velocity and send new location and anim to server
-        if (vx !== 0 || vy !== 0) network.updatePlayer(this.x, this.y, this.currentAnimKey)
+        if (vx !== 0 || vy !== 0) this.sendMovement(network)
         if (vx > 0) {
           this.play(`${this.playerTexture}_run_right`, true)
         } else if (vx < 0) {
@@ -184,7 +231,7 @@ export default class MyPlayer extends Player {
           if (this.currentAnimKey !== newAnim) {
             this.play(parts.join('_'), true)
             // send new location and anim to server
-            network.updatePlayer(this.x, this.y, this.currentAnimKey)
+            this.sendMovement(network, true)
           }
         }
         break
@@ -199,7 +246,7 @@ export default class MyPlayer extends Player {
           this.chairOnSit?.clearDialogBox()
           playerSelector.setPosition(this.x, this.y)
           playerSelector.update(this, cursors)
-          network.updatePlayer(this.x, this.y, this.currentAnimKey)
+          this.sendMovement(network, true)
         }
         break
     }
