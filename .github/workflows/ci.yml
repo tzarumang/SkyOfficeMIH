@@ -89,10 +89,27 @@ jobs:
             -e PEER_PORT=443 \
             -p 8080:80 skyoffice-client:ci
 
-          for _ in $(seq 1 30); do
-            curl -fsS http://localhost:2567/health >/dev/null 2>&1 && break
-            sleep 2
-          done
+          # Both containers bind their port some way after `docker run` returns,
+          # so poll each one before asserting anything about it. The client used
+          # to be curled with no readiness wait at all, which raced nginx's bind
+          # and died on a reset socket. Give up early on a container that has
+          # already exited rather than spending the full minute on a corpse.
+          wait_for() {
+            local name=$1 url=$2
+            for _ in $(seq 1 30); do
+              if [ "$(docker inspect -f '{{.State.Running}}' "$name")" != true ]; then
+                echo "$name is no longer running; it never served $url" >&2
+                return 1
+              fi
+              curl -fsS "$url" >/dev/null 2>&1 && return 0
+              sleep 2
+            done
+            echo "timed out after 60s waiting for $name to serve $url" >&2
+            return 1
+          }
+
+          wait_for sky-server http://localhost:2567/health
+          wait_for sky-client http://localhost:8080/
 
           curl -fsS http://localhost:2567/health | grep -q '"status":"ok"'
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:2567/colyseus)" = "404"
@@ -102,6 +119,11 @@ jobs:
           curl -fsS http://localhost:8080/config.js | grep -q 'peer.example.test'
           curl -fsSI http://localhost:8080/ | grep -qi 'x-frame-options: DENY'
 
-      - name: Container logs on failure
+      - name: Container state and logs on failure
         if: failure()
-        run: docker logs sky-server || true; docker logs sky-client || true
+        run: |
+          docker ps -a || true
+          echo '--- sky-server ---'
+          docker logs sky-server || true
+          echo '--- sky-client ---'
+          docker logs sky-client || true
