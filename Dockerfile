@@ -5,7 +5,7 @@
 # the path MapObjects.ts expects to find it (four levels up from the compiled
 # server/lib/server/rooms).
 
-FROM node:18-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 
 # bcrypt is a native module; alpine needs a toolchain to build it
@@ -26,7 +26,7 @@ RUN yarn build
 RUN yarn install --frozen-lockfile --production --ignore-scripts && yarn cache clean
 
 
-FROM node:18-alpine AS runtime
+FROM node:22-alpine AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production

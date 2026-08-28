@@ -4,7 +4,7 @@
 # deployment. Instead the entrypoint writes /config.js from the environment at
 # container start, so one image can be pointed anywhere from the Portainer UI.
 
-FROM node:18-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 
 COPY client/package.json client/yarn.lock ./client/
