@@ -22,6 +22,8 @@ FROM nginx:1.27-alpine AS runtime
 
 COPY --from=build /app/client/dist /usr/share/nginx/html
 COPY client/nginx.conf /etc/nginx/conf.d/default.conf
+# included into every location block - see the note in nginx.conf
+COPY client/security-headers.conf /etc/nginx/skyoffice-security-headers.conf
 COPY client/config.js.template /etc/skyoffice/config.js.template
 COPY client/docker-entrypoint.sh /docker-entrypoint.d/40-skyoffice-config.sh
 RUN chmod +x /docker-entrypoint.d/40-skyoffice-config.sh

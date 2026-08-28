@@ -26,8 +26,7 @@ import { joinErrorMessage } from '../joinErrors'
 import { newOfficeSlug } from '../shareLink'
 import { useAppSelector } from '../hooks'
 
-import phaserGame from '../PhaserGame'
-import Bootstrap from '../scenes/Bootstrap'
+import { bootstrapScene } from '../gameHandle'
 
 /**
  * Three columns rather than one.
@@ -136,7 +135,8 @@ export const CreateRoomForm = () => {
 
     // create custom room if name and description are not empty
     if (isValidName && isValidDescription && lobbyJoined) {
-      const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
+      const bootstrap = bootstrapScene()
+      if (!bootstrap) return
       // an office that should outlive the room needs a stable id to be found by
       const settings = {
         ...values,

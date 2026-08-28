@@ -1,8 +1,7 @@
 import Peer from 'peerjs'
-import store from '../stores'
+import { appStore } from '../stores/storeHandle'
 import { setMyStream, addVideoStream, removeVideoStream } from '../stores/ComputerStore'
-import phaserGame from '../PhaserGame'
-import Game from '../scenes/Game'
+import { gameScene } from '../gameHandle'
 import { PEER_RECONNECT_DELAY_MS, peerOptions } from './peerConfig'
 import {
   SCREEN_SHARE_BITRATE_BPS,
@@ -51,7 +50,7 @@ export default class ShareScreenManager {
       call.answer()
 
       call.on('stream', (userVideoStream) => {
-        store.dispatch(addVideoStream({ id: call.peer, call, stream: userVideoStream }))
+        appStore().dispatch(addVideoStream({ id: call.peer, call, stream: userVideoStream }))
       })
       // we handled on close on our own
     })
@@ -65,7 +64,8 @@ export default class ShareScreenManager {
 
     // whoever is already at this computer joined before our dialog opened, so
     // they never came through onUserJoined - accept their share too
-    const game = phaserGame.scene.keys.game as Game
+    const game = gameScene()
+    if (!game) return
     const computerItem = game.itemById(ItemType.COMPUTER, computerId)
     if (computerItem) {
       for (const userId of computerItem.currentUsers) {
@@ -96,11 +96,12 @@ export default class ShareScreenManager {
         }
 
         this.myStream = stream
-        store.dispatch(setMyStream(stream))
+        appStore().dispatch(setMyStream(stream))
 
         // Call all existing users.
-        const game = phaserGame.scene.keys.game as Game
-        const computerItem = game.itemById(ItemType.COMPUTER, store.getState().computer.computerId!)
+        const game = gameScene()
+        if (!game) return
+        const computerItem = game.itemById(ItemType.COMPUTER, appStore().getState().computer.computerId!)
         if (computerItem) {
           for (const userId of computerItem.currentUsers) {
             this.onUserJoined(userId)
@@ -116,10 +117,10 @@ export default class ShareScreenManager {
     this.myStream?.getTracks().forEach((track) => track.stop())
     this.myStream = undefined
     if (shouldDispatch) {
-      store.dispatch(setMyStream(null))
+      appStore().dispatch(setMyStream(null))
       // Manually let all other existing users know screen sharing is stopped
-      const game = phaserGame.scene.keys.game as Game
-      game.network.onStopScreenShare(store.getState().computer.computerId!)
+      const game = gameScene()
+      game?.network.onStopScreenShare(appStore().getState().computer.computerId!)
     }
   }
 
@@ -150,6 +151,6 @@ export default class ShareScreenManager {
 
     const sanatizedId = toScreenSharePeerId(userId)
     this.allowedPeers.delete(sanatizedId)
-    store.dispatch(removeVideoStream(sanatizedId))
+    appStore().dispatch(removeVideoStream(sanatizedId))
   }
 }

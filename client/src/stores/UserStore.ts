@@ -2,8 +2,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { toPeerId } from '../util'
 import { BackgroundMode } from '../../../types/BackgroundMode'
 
-import phaserGame from '../PhaserGame'
-import Bootstrap from '../scenes/Bootstrap'
+import { bootstrapScene } from '../gameHandle'
 
 /**
  * The setting covers everything the office makes a noise about - pets, and now
@@ -55,8 +54,8 @@ export const userSlice = createSlice({
         state.backgroundMode === BackgroundMode.DAY ? BackgroundMode.NIGHT : BackgroundMode.DAY
 
       state.backgroundMode = newMode
-      const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
-      bootstrap.changeBackgroundMode(newMode)
+      const bootstrap = bootstrapScene()
+      bootstrap?.changeBackgroundMode(newMode)
     },
     setSessionId: (state, action: PayloadAction<string>) => {
       state.sessionId = action.payload

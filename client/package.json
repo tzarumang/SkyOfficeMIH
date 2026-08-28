@@ -22,7 +22,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "colyseus.js": "^0.14.13",
     "emoji-mart": "^3.0.1",
-    "immer": "^10.1.3",
+    "immer": "^11.1.18",
     "peerjs": "^1.5.5",
     "phaser": "^3.90.0",
     "react": "^18.3.1",

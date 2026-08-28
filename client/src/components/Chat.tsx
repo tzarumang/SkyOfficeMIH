@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, Suspense, lazy } from 'react'
 import styled from 'styled-components'
 import Box from '@mui/material/Box'
 import Fab from '@mui/material/Fab'
@@ -8,15 +8,19 @@ import InputBase from '@mui/material/InputBase'
 import InsertEmoticonIcon from '@mui/icons-material/InsertEmoticon'
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline'
 import CloseIcon from '@mui/icons-material/Close'
-import 'emoji-mart/css/emoji-mart.css'
-import { Picker } from 'emoji-mart'
 
-import phaserGame from '../PhaserGame'
-import Game from '../scenes/Game'
+import { gameScene } from '../gameHandle'
 
 import { getColorByString } from '../util'
 import { useAppDispatch, useAppSelector } from '../hooks'
 import { MessageType, setFocused, setShowChat } from '../stores/ChatStore'
+
+/**
+ * Loaded when somebody opens the picker rather than when the app starts - it
+ * is a fifth of the bundle for a panel most people never open. See
+ * EmojiPicker.tsx.
+ */
+const EmojiPicker = lazy(() => import('./EmojiPicker'))
 
 const Backdrop = styled.div`
   position: fixed;
@@ -119,6 +123,25 @@ const EmojiPickerWrapper = styled.div`
   right: 16px;
 `
 
+/**
+ * Stands in while the picker's chunk arrives. Sized and coloured like the
+ * panel it is replacing so the corner does not jump when it lands - on a slow
+ * line this is on screen for a moment, which is the whole point of splitting
+ * it out.
+ */
+const EmojiPickerLoading = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 338px;
+  height: 320px;
+  max-width: 80vw;
+  border-radius: 5px;
+  background: #222;
+  color: #999;
+  font-size: 14px;
+`
+
 const dateFormatter = new Intl.DateTimeFormat('en', {
   timeStyle: 'short',
   dateStyle: 'short',
@@ -170,7 +193,7 @@ export default function Chat() {
   const focused = useAppSelector((state) => state.chat.focused)
   const showChat = useAppSelector((state) => state.chat.showChat)
   const dispatch = useAppDispatch()
-  const game = phaserGame.scene.keys.game as Game
+  const game = gameScene()
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(event.target.value)
@@ -200,7 +223,7 @@ export default function Chat() {
 
     const val = inputValue.trim()
     setInputValue('')
-    if (val) {
+    if (val && game) {
       game.network.addChatMessage(val)
       game.myPlayer.updateDialogBubble(val)
     }
@@ -243,17 +266,15 @@ export default function Chat() {
               <div ref={messagesEndRef} />
               {showEmojiPicker && (
                 <EmojiPickerWrapper>
-                  <Picker
-                    theme="dark"
-                    showSkinTones={false}
-                    showPreview={false}
-                    onSelect={(emoji) => {
-                      setInputValue(inputValue + emoji.native)
-                      setShowEmojiPicker(!showEmojiPicker)
-                      dispatch(setFocused(true))
-                    }}
-                    exclude={['recent', 'flags']}
-                  />
+                  <Suspense fallback={<EmojiPickerLoading>Loading emoji…</EmojiPickerLoading>}>
+                    <EmojiPicker
+                      onSelect={(native) => {
+                        setInputValue(inputValue + native)
+                        setShowEmojiPicker(!showEmojiPicker)
+                        dispatch(setFocused(true))
+                      }}
+                    />
+                  </Suspense>
                 </EmojiPickerWrapper>
               )}
             </ChatBox>

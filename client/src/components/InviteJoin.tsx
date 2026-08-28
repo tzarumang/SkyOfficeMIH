@@ -7,8 +7,7 @@ import LinearProgress from '@mui/material/LinearProgress'
 
 import { useAppSelector } from '../hooks'
 import { forgetShareLink } from '../shareLink'
-import phaserGame from '../PhaserGame'
-import Bootstrap from '../scenes/Bootstrap'
+import { bootstrapScene } from '../gameHandle'
 
 const Wrapper = styled.form`
   display: flex;
@@ -52,7 +51,8 @@ export function InviteJoin({
 
   const attempt = (withPassword: string | null) => {
     setStage('joining')
-    const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
+    const bootstrap = bootstrapScene()
+    if (!bootstrap) return
 
     const opening =
       invite.kind === 'office'

@@ -6,8 +6,7 @@ import Alert from '@mui/material/Alert'
 
 import { useAppSelector } from '../hooks'
 import { joinErrorMessage } from '../joinErrors'
-import phaserGame from '../PhaserGame'
-import Bootstrap from '../scenes/Bootstrap'
+import { bootstrapScene } from '../gameHandle'
 
 const Wrapper = styled.form`
   display: flex;
@@ -43,7 +42,8 @@ export const JoinByIdForm = () => {
     if (!id || !lobbyJoined) return
 
     setError('')
-    const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
+    const bootstrap = bootstrapScene()
+    if (!bootstrap) return
     bootstrap.network
       .joinCustomById(id, password || null)
       .then(() => bootstrap.launchGame())
