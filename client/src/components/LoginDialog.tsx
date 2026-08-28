@@ -19,8 +19,7 @@ import { useAppSelector, useAppDispatch } from '../hooks'
 import { setLoggedIn } from '../stores/UserStore'
 import { getAvatarString, getColorByString } from '../util'
 
-import phaserGame from '../PhaserGame'
-import Game from '../scenes/Game'
+import { gameScene } from '../gameHandle'
 
 const Wrapper = styled.form`
   position: fixed;
@@ -164,13 +163,15 @@ export default function LoginDialog() {
   const roomJoined = useAppSelector((state) => state.room.roomJoined)
   const roomName = useAppSelector((state) => state.room.roomName)
   const roomDescription = useAppSelector((state) => state.room.roomDescription)
-  const game = phaserGame.scene.keys.game as Game
+  const game = gameScene()
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (name === '') {
       setNameFieldEmpty(true)
-    } else if (roomJoined) {
+      // roomJoined can only be true once the engine is up, so `game` is a
+      // formality here rather than a case anybody reaches
+    } else if (roomJoined && game) {
       game.registerKeys()
       game.myPlayer.setPlayerName(name)
       game.myPlayer.setAvatar(avatar)
@@ -280,7 +281,7 @@ export default function LoginDialog() {
                 variant="outlined"
                 color="secondary"
                 onClick={() => {
-                  game.network.webRTC?.getUserMedia()
+                  game?.network.webRTC?.getUserMedia()
                 }}
               >
                 Connect Webcam

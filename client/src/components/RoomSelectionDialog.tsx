@@ -18,8 +18,7 @@ import { JoinByIdForm } from './JoinByIdForm'
 import { useAppSelector } from '../hooks'
 
 import { joinErrorMessage } from '../joinErrors'
-import phaserGame from '../PhaserGame'
-import Bootstrap from '../scenes/Bootstrap'
+import { bootstrapScene } from '../gameHandle'
 
 const Backdrop = styled.div`
   position: absolute;
@@ -116,7 +115,8 @@ export default function RoomSelectionDialog() {
 
   const handleConnect = () => {
     if (lobbyJoined) {
-      const bootstrap = phaserGame.scene.keys.bootstrap as Bootstrap
+      const bootstrap = bootstrapScene()
+      if (!bootstrap) return
       setError('')
       bootstrap.network
         .joinOrCreatePublic()

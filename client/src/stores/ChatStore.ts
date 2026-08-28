@@ -1,7 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { IChatMessage } from '../../../types/IOfficeState'
-import phaserGame from '../PhaserGame'
-import Game from '../scenes/Game'
+import { gameScene } from '../gameHandle'
 
 /**
  * The server keeps the last 100 messages; this is the client copy, which also
@@ -72,8 +71,9 @@ export const chatSlice = createSlice({
       trim(state.chatMessages)
     },
     setFocused: (state, action: PayloadAction<boolean>) => {
-      const game = phaserGame.scene.keys.game as Game
-      action.payload ? game.disableKeys() : game.enableKeys()
+      const game = gameScene()
+      if (action.payload) game?.disableKeys()
+      else game?.enableKeys()
       state.focused = action.payload
     },
     setShowChat: (state, action: PayloadAction<boolean>) => {
