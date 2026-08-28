@@ -1,6 +1,10 @@
 /**
- * Flat config, which is the only format ESLint 9 reads. Replaces .eslintrc.js
- * and .eslintignore, both of which ESLint 9 ignores.
+ * Flat config, which is the only format ESLint reads since 9. Replaces
+ * .eslintrc.js and .eslintignore, neither of which it looks at any more.
+ *
+ * `@eslint/js` and `globals` are declared in package.json rather than leaned
+ * on as transitive dependencies of eslint: they arrived that way under 9 and
+ * stopped in 10, which took this config down with them.
  *
  * Two rules from the old config are gone rather than translated:
  * `ban-ts-ignore` was folded into `ban-ts-comment` several majors ago, and

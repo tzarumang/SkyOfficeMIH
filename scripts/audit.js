@@ -38,7 +38,8 @@ function findYarn() {
 const yarn = findYarn()
 
 function advisoriesIn(workspace) {
-  let output = ''
+  // assigned by both branches below before anything reads it
+  let output
 
   try {
     output = execSync(yarn + ' audit --json --groups dependencies', {
