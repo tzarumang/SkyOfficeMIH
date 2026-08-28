@@ -32,7 +32,8 @@ function App() {
   const videoConnected = useAppSelector((state) => state.user.videoConnected)
   const roomJoined = useAppSelector((state) => state.room.roomJoined)
 
-  let ui: JSX.Element
+  // React 19 stopped declaring JSX as a global namespace; it lives on React now
+  let ui: React.JSX.Element
   if (loggedIn) {
     if (computerDialogOpen) {
       /* Render ComputerDialog if user is using a computer. */
