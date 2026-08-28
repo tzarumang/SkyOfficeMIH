@@ -18,8 +18,10 @@ const tsParser = require('@typescript-eslint/parser')
 
 module.exports = [
   {
-    // don't ever lint node_modules, or build output
-    ignores: ['**/node_modules/**', '**/dist/**', '**/lib/**'],
+    // don't ever lint node_modules, or build output. client/public is served
+    // verbatim to browsers rather than compiled - config.js in there is a
+    // deployment artefact overwritten at container start, not source.
+    ignores: ['**/node_modules/**', '**/dist/**', '**/lib/**', 'client/public/**'],
   },
   js.configs.recommended,
   {
@@ -36,6 +38,33 @@ module.exports = [
       '@typescript-eslint/explicit-function-return-type': 0,
       '@typescript-eslint/no-namespace': ['error', { allowDeclarations: true }],
       '@typescript-eslint/no-explicit-any': 0,
+      /**
+       * A leading underscore means "this exists because something else decided
+       * the signature". Phaser's update(t, dt) and Colyseus' onLeave(client,
+       * consented) have to be declared in full to be overridden at all, even
+       * where the body wants none of it.
+       */
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+  {
+    /**
+     * The integration test sets env vars that the server reads as it is
+     * imported, and an `import` would hoist above them - so it requires the
+     * server on purpose, after the assignments. The empty catch is deliberate
+     * too: the office store may not exist yet, and that is the normal case.
+     */
+    files: ['server/test/integration.ts'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 0,
+      'no-empty': 0,
     },
   },
   {

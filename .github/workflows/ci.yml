@@ -27,6 +27,11 @@ jobs:
         run: yarn install --frozen-lockfile
         working-directory: client
 
+      # Lints the whole repo - server, client and shared types - from the one
+      # flat config at the root. Cheapest check in the job, so it runs first.
+      - name: Lint
+        run: yarn lint
+
       - name: Typecheck server
         run: yarn tsc --project server/tsconfig.server.json --noEmit
 

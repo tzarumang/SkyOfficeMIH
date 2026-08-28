@@ -132,7 +132,7 @@ export default class MyPlayer extends Player {
     }
 
     switch (this.playerBehavior) {
-      case PlayerBehavior.IDLE:
+      case PlayerBehavior.IDLE: {
         // if press E in front of selected chair
         if (Phaser.Input.Keyboard.JustDown(keyE) && spec?.key === 'E' && item instanceof Chair) {
           const chairItem = item
@@ -235,8 +235,9 @@ export default class MyPlayer extends Player {
           }
         }
         break
+      }
 
-      case PlayerBehavior.SITTING:
+      case PlayerBehavior.SITTING: {
         // back to idle if player press E while sitting
         if (Phaser.Input.Keyboard.JustDown(keyE)) {
           const parts = this.currentAnimKey.split('_')
@@ -249,6 +250,7 @@ export default class MyPlayer extends Player {
           this.sendMovement(network, true)
         }
         break
+      }
     }
   }
 }

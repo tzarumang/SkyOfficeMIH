@@ -6,7 +6,7 @@ import { furnish, Placement } from './furnish'
 import { paint, TiledMap } from './paint'
 import { Problem, validate } from './validate'
 import { EXPECTED_FIRSTGIDS } from './vocabulary'
-import { DEFAULT_OFFICE_SPEC, OfficeSpec, clampOfficeSpec, totalDesks } from '../../types/Office'
+import { DEFAULT_OFFICE_SPEC, OfficeSpec, clampOfficeSpec } from '../../types/Office'
 import { REFERENCE_MAP_PATH } from '../rooms/MapObjects'
 
 export { Problem } from './validate'

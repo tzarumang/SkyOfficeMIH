@@ -553,7 +553,7 @@ export class SkyOffice extends Room<OfficeState> {
     return true
   }
 
-  onJoin(client: Client, options: any) {
+  onJoin(client: Client, _options: any) {
     const player = new Player()
     // every office is its own size, so the door is wherever that map put it
     player.x = this.office.spawn.x
@@ -568,7 +568,7 @@ export class SkyOffice extends Room<OfficeState> {
     })
   }
 
-  onLeave(client: Client, consented: boolean) {
+  onLeave(client: Client, _consented: boolean) {
     this.movementLimiter.forget(client.sessionId)
     this.movementBudget.forget(client.sessionId)
     this.chatLimiter.forget(client.sessionId)
