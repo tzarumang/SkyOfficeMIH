@@ -106,37 +106,6 @@
       }
     ],
     "types": [],
-    "client": [
-      {
-        "id": 1113431,
-        "module": "swiper",
-        "severity": "critical",
-        "title": "Prototype pollution in swiper"
-      },
-      {
-        "id": 1115552,
-        "module": "picomatch",
-        "severity": "high",
-        "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers"
-      },
-      {
-        "id": 1115806,
-        "module": "lodash",
-        "severity": "high",
-        "title": "lodash vulnerable to Code Injection via `_.template` imports key names"
-      },
-      {
-        "id": 1117420,
-        "module": "@babel/traverse",
-        "severity": "critical",
-        "title": "Babel vulnerable to arbitrary code execution when compiling specifically crafted malicious code"
-      },
-      {
-        "id": 1123525,
-        "module": "vite",
-        "severity": "high",
-        "title": "vite: `server.fs.deny` bypass on Windows alternate paths"
-      }
-    ]
+    "client": []
   }
 }
