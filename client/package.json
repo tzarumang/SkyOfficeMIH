@@ -16,7 +16,7 @@
     "@mui/material": "^9.4.0",
     "@reduxjs/toolkit": "^2.12.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "colyseus.js": "^0.14.13",
+    "colyseus.js": "^0.16.22",
     "emoji-mart": "^3.0.1",
     "immer": "^11.1.18",
     "peerjs": "^1.5.5",

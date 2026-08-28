@@ -2,7 +2,8 @@ import http from 'http'
 import crypto from 'crypto'
 import express, { RequestHandler } from 'express'
 import cors from 'cors'
-import { Server, LobbyRoom } from 'colyseus'
+import { Server, LobbyRoom } from '@colyseus/core'
+import { WebSocketTransport } from '@colyseus/ws-transport'
 import { monitor } from '@colyseus/monitor'
 import { RoomType } from '../types/Rooms'
 
@@ -136,8 +137,13 @@ app.get('/office/map/:id.json', (req, res) => {
 })
 
 const server = http.createServer(app)
+/**
+ * The websocket options moved out of ServerOptions and into the transport in
+ * 0.15. Passing `server` at the top level still works in 0.16 and still
+ * prints a deprecation on every boot, so it is spelled out here instead.
+ */
 const gameServer = new Server({
-  server,
+  transport: new WebSocketTransport({ server }),
 })
 
 // must come after the Server constructor, which is what installs the

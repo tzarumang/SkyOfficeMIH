@@ -22,6 +22,7 @@ require('../index')
 import { parsePeerHost } from '../../types/PeerHost'
 import { drawingVersion } from '../office/index'
 import { Client } from 'colyseus.js'
+import { matchMaker } from '@colyseus/core'
 import { Message } from '../../types/Messages'
 import { classicOfficeMap, REFERENCE_MAP_PATH } from '../rooms/MapObjects'
 import { officeDrawingFor } from '../rooms/OfficeMaps'
@@ -72,6 +73,22 @@ const CLIENT_LAYERS = [
   'VendingMachine',
   'Zone',
 ]
+
+/**
+ * The room list, which Client#getAvailableRooms used to fetch.
+ *
+ * 0.16 dropped that method and the endpoint behind it: matchmaking is
+ * POST-only now and exposes join methods, not a listing. This test runs in
+ * the same process as the server, so it asks the matchmaker directly rather
+ * than going out and back through a lobby room.
+ *
+ * `private: false` is what makes this the same answer a client would get -
+ * an unlisted office is one that called setPrivate(true), and the lobby
+ * leaves those out.
+ */
+async function availableRooms(roomName: string) {
+  return matchMaker.query({ name: roomName, private: false })
+}
 
 let failures = 0
 function check(label: string, actual: unknown, expected: unknown) {
@@ -154,7 +171,7 @@ async function officeLifetimeTests() {
     password: null,
     unlisted: false,
   })
-  const throwawayId = throwaway.id
+  const throwawayId = throwaway.roomId
   await throwaway.leave()
   await sleep(900)
   let gone = false
@@ -185,10 +202,10 @@ async function officeLifetimeTests() {
     (reopened.state as any) !== undefined,
     true
   )
-  const listed = await client.getAvailableRooms('custom')
+  const listed = await availableRooms('custom')
   check(
     'and is still unlisted after reopening',
-    listed.some((r) => r.roomId === reopened.id),
+    listed.some((r) => r.roomId === reopened.roomId),
     false
   )
   await reopened.leave()
@@ -222,7 +239,7 @@ async function officeLifetimeTests() {
     slug: lockedSlug,
     password: 'hunter2',
   })
-  check('and the real password still opens it', typeof withPassword.id === 'string', true)
+  check('and the real password still opens it', typeof withPassword.roomId === 'string', true)
   await withPassword.leave()
 
   // a slug nobody has claimed must not mint an office
@@ -426,7 +443,15 @@ async function roomTests() {
   await sleep(250)
   check('a position outside the map is dropped', positionOf(room).x, heldAt.x)
 
-  room.send(Message.UPDATE_PLAYER_NAME, { name: 'x'.repeat(5000) })
+  /**
+   * Long enough to be capped, short enough to arrive.
+   *
+   * This used to send 5000 characters. The ws transport caps a frame at 4 kB
+   * of its own accord now, so a name that big never reaches the room at all -
+   * it kills the socket instead, and every check after it fails with it. The
+   * cap being tested here is the room's, so the name only has to beat 32.
+   */
+  room.send(Message.UPDATE_PLAYER_NAME, { name: 'x'.repeat(500) })
   await sleep(300)
   check('player name is capped', (room.state as any).players.get(room.sessionId).name.length, 32)
 
@@ -445,13 +470,13 @@ async function roomTests() {
   )
   check('are all distinct', new Set(ids).size, ids.length)
 
-  const publicId = room.id
+  const publicId = room.roomId
   await room.leave()
 
   console.log('\nRoom lifetime')
   await sleep(700)
   const publicAgain = await client.joinOrCreate('skyoffice')
-  check('the public lobby survives being empty', publicAgain.id, publicId)
+  check('the public lobby survives being empty', publicAgain.roomId, publicId)
   await publicAgain.leave()
 
   const temp = await client.create('custom', {
@@ -460,7 +485,7 @@ async function roomTests() {
     password: null,
     unlisted: false,
   })
-  const tempId = temp.id
+  const tempId = temp.roomId
   await temp.leave()
   await sleep(900)
   let disposed = false
@@ -479,7 +504,7 @@ async function roomTests() {
     unlisted: false,
   })
   await sleep(300)
-  const listed = (await client.getAvailableRooms('custom')).find((r) => r.roomId === big.id)
+  const listed = (await availableRooms('custom')).find((r) => r.roomId === big.roomId)
   check('room name is capped', (listed?.metadata as any)?.name.length, 64)
   check('room description is capped', (listed?.metadata as any)?.description.length, 2000)
   await big.leave()
@@ -491,14 +516,14 @@ async function roomTests() {
     unlisted: true,
   })
   await sleep(400)
-  const rooms = await client.getAvailableRooms('custom')
+  const rooms = await availableRooms('custom')
   check(
     'an unlisted room is not listed',
-    rooms.some((r) => r.roomId === hidden.id),
+    rooms.some((r) => r.roomId === hidden.roomId),
     false
   )
-  const rejoined = await client.joinById(hidden.id)
-  check('an unlisted room is still joinable by id', rejoined.id, hidden.id)
+  const rejoined = await client.joinById(hidden.roomId)
+  check('an unlisted room is still joinable by id', rejoined.roomId, hidden.roomId)
   await rejoined.leave()
   await hidden.leave()
 
@@ -513,7 +538,7 @@ async function roomTests() {
   const codes: number[] = []
   for (let i = 0; i < 7; i++) {
     try {
-      await client.joinById(locked.id, { password: `wrong-${i}` })
+      await client.joinById(locked.roomId, { password: `wrong-${i}` })
     } catch (error: any) {
       codes.push(error.code)
     }
@@ -567,7 +592,7 @@ async function whoIsAlreadyHereTests() {
   await sleep(300)
 
   // second in, long after the first announced themselves
-  const second = await client.joinById(first.id, { password: null })
+  const second = await client.joinById(first.roomId, { password: null })
   await sleep(400)
 
   const seenBySecond = [...(second.state as any).players.entries()]
