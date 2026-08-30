@@ -3,6 +3,7 @@ export enum ItemType {
   COMPUTER,
   WHITEBOARD,
   VENDINGMACHINE,
+  EXIT,
 }
 
 /**
@@ -63,6 +64,16 @@ export interface ItemSpec {
   depthOffset: number
   /** other pictures the same item can be drawn with */
   alternates?: ItemArt[]
+  /**
+   * Let a map get away with not having this item's layer at all.
+   *
+   * A map with no chairs in it is broken and should say so. A map with no way
+   * out of it was simply drawn before there was one - every office a previous
+   * build of the generator produced, and the hand-drawn one until now - and
+   * refusing to open one of those would take a whole office down over a
+   * staircase.
+   */
+  optional?: boolean
 }
 
 export const ITEM_SPECS: Record<ItemType, ItemSpec> = {
@@ -120,6 +131,28 @@ export const ITEM_SPECS: Record<ItemType, ItemSpec> = {
     reach: 64,
     depthOffset: 0,
   },
+  [ItemType.EXIT]: {
+    layer: 'Exit',
+    texture: 'stairs',
+    file: 'assets/items/stairs.png',
+    frameWidth: 128,
+    frameHeight: 64,
+    tileset: 'stairs',
+    key: 'E',
+    prompt: () => 'Press E to leave',
+    /**
+     * The staircase stops nobody by itself: what a player may walk onto is
+     * already settled by the floor underneath it, which is a step at the top
+     * and something solid at the bottom in both the hand-drawn office and a
+     * generated one. Giving the picture a collider as well would take the top
+     * step away from the office that has drawn one there for years.
+     */
+    collides: false,
+    shared: false,
+    reach: 64,
+    depthOffset: 0,
+    optional: true,
+  },
   [ItemType.VENDINGMACHINE]: {
     layer: 'VendingMachine',
     texture: 'vendingmachines',
@@ -144,6 +177,7 @@ export const ITEM_TYPES: ItemType[] = [
   ItemType.COMPUTER,
   ItemType.WHITEBOARD,
   ItemType.VENDINGMACHINE,
+  ItemType.EXIT,
 ]
 
 /** the types the server keeps connected-user state for */

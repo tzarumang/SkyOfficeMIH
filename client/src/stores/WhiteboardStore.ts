@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 
 import { gameScene } from '../gameHandle'
+import { leftOffice } from './leftOffice'
 
 interface WhiteboardState {
   whiteboardDialogOpen: boolean
@@ -42,6 +43,17 @@ export const whiteboardSlice = createSlice({
         `https://wbo.ophir.dev/boards/sky-office-${action.payload.roomId}`
       )
     },
+  },
+  extraReducers: (builder) => {
+    /**
+     * Board urls are keyed by the whiteboard's place in its own map, so the
+     * third whiteboard of the office just left and the third of the next one
+     * answer to the same key. Keeping them would open the old office's board
+     * on a wall in the new one.
+     */
+    builder.addCase(leftOffice, (state) => {
+      state.urls.clear()
+    })
   },
 })
 

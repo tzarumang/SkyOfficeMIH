@@ -11,6 +11,7 @@ import { placeName } from '../placeName'
 import { setSessionId, setPlayerNameMap, removePlayerNameMap } from '../stores/UserStore'
 import {
   setLobbyJoined,
+  setPublicLobby,
   setJoinedRoomData,
   setAvailableRooms,
   addAvailableRooms,
@@ -30,6 +31,9 @@ import { serverUrl } from '../runtimeConfig'
  */
 const CATCH_UP_FIELDS = ['avatar', 'anim', 'readyToConnect', 'videoConnected'] as const
 
+/** anything the game scene hands to one of the onX methods below */
+type SceneListener = (...args: any[]) => void
+
 /** every replicated field of a player, which is what onChange used to report */
 const PLAYER_FIELDS = [
   'name',
@@ -46,8 +50,18 @@ export default class Network {
   private endpoint: string
   private client: Client
   private room?: Room<IOfficeState>
-  private lobby!: Room
+  /** the office listing, held only while nothing else is joined */
+  private lobby?: Room
   webRTC?: WebRTC
+  /**
+   * Every listener the game scene asked for, so they can all be dropped at
+   * once when it shuts down. The scene runs again for each office a player
+   * walks into, on the same instance, and phaserEvents is a single emitter
+   * that outlives all of them - so without this the second office would handle
+   * every event twice, the third three times, and everyone who joined would
+   * be drawn once per office ever visited.
+   */
+  private sceneListeners: Array<{ event: Event; callback: SceneListener; context?: any }> = []
 
   mySessionId!: string
 
@@ -66,6 +80,39 @@ export default class Network {
     phaserEvents.on(Event.MY_PLAYER_PET_CHANGE, this.updatePlayerPet, this)
     phaserEvents.on(Event.MY_PLAYER_TEXTURE_CHANGE, this.updatePlayer, this)
     phaserEvents.on(Event.PLAYER_DISCONNECTED, this.playerStreamDisconnect, this)
+  }
+
+  /** registers a listener on behalf of the game scene, and remembers it */
+  private listen(event: Event, callback: SceneListener, context?: any) {
+    phaserEvents.on(event, callback, context)
+    this.sceneListeners.push({ event, callback, context })
+  }
+
+  /** drops every listener the game scene took out, as it shuts down */
+  stopListening() {
+    for (const { event, callback, context } of this.sceneListeners) {
+      phaserEvents.off(event, callback, context)
+    }
+    this.sceneListeners = []
+  }
+
+  /**
+   * Puts down the office this player is in, leaving them connected to nothing
+   * but the lobby listing.
+   *
+   * The call is torn down with the room rather than carried over: a mesh of
+   * peers arranged around who was standing where in a building this player has
+   * walked out of is not the mesh the next building wants, and the camera is
+   * picked up again on the other side by the same permission check that starts
+   * it on a first visit.
+   */
+  async leaveRoom() {
+    this.webRTC?.dispose()
+    this.webRTC = undefined
+
+    const room = this.room
+    this.room = undefined
+    await room?.leave()
   }
 
   /**
@@ -91,13 +138,13 @@ export default class Network {
   // method to join the public lobby
   async joinOrCreatePublic() {
     this.room = await this.client.joinOrCreate(RoomType.PUBLIC)
-    this.initialize()
+    this.initialize(RoomType.PUBLIC)
   }
 
   // method to join a custom room
   async joinCustomById(roomId: string, password: string | null) {
     this.room = await this.client.joinById(roomId, { password })
-    this.initialize()
+    this.initialize(RoomType.CUSTOM)
   }
 
   // method to create a custom room
@@ -125,7 +172,7 @@ export default class Network {
       office,
       ...(slug ? { slug, lifetimeDays } : {}),
     })
-    this.initialize()
+    this.initialize(RoomType.CUSTOM)
   }
 
   /**
@@ -134,7 +181,7 @@ export default class Network {
    */
   async joinOfficeBySlug(slug: string, password: string | null) {
     this.room = await this.client.joinOrCreate(RoomType.CUSTOM, { slug, password })
-    this.initialize()
+    this.initialize(RoomType.CUSTOM)
   }
 
   /**
@@ -206,10 +253,23 @@ export default class Network {
   }
 
   // set up all network listeners before the game starts
-  initialize() {
+  initialize(joined: RoomType) {
     if (!this.room) return
 
-    this.lobby.leave()
+    // Which of the two this is cannot be read back off the room afterwards -
+    // the lobby carries a name like any other office - so it is recorded from
+    // the join that was actually made.
+    store.dispatch(setPublicLobby(joined === RoomType.PUBLIC))
+
+    /**
+     * The listing is only there to keep the office list live while somebody is
+     * choosing, so it is dropped on the way in. Somebody walking out of an
+     * office and into the lobby comes back through here having dropped it
+     * already, which is why this has to be harmless to do twice.
+     */
+    this.lobby?.leave()
+    this.lobby = undefined
+
     this.mySessionId = this.room.sessionId
     store.dispatch(setSessionId(this.room.sessionId))
     this.webRTC = new WebRTC(this.mySessionId, this)
@@ -315,7 +375,7 @@ export default class Network {
 
   // method to register event listener and call back function when a item user added
   onChatMessageAdded(callback: (playerId: string, content: string) => void, context?: any) {
-    phaserEvents.on(Event.UPDATE_DIALOG_BUBBLE, callback, context)
+    this.listen(Event.UPDATE_DIALOG_BUBBLE, callback, context)
   }
 
   // method to register event listener and call back function when a item user added
@@ -323,7 +383,7 @@ export default class Network {
     callback: (playerId: string, key: string, itemType: ItemType) => void,
     context?: any
   ) {
-    phaserEvents.on(Event.ITEM_USER_ADDED, callback, context)
+    this.listen(Event.ITEM_USER_ADDED, callback, context)
   }
 
   // method to register event listener and call back function when a item user removed
@@ -331,7 +391,7 @@ export default class Network {
     callback: (playerId: string, key: string, itemType: ItemType) => void,
     context?: any
   ) {
-    phaserEvents.on(Event.ITEM_USER_REMOVED, callback, context)
+    this.listen(Event.ITEM_USER_REMOVED, callback, context)
   }
 
   // method to register event listener and call back function when a player joined
@@ -439,22 +499,22 @@ export default class Network {
   }
 
   onPlayerJoined(callback: (Player: IPlayer, key: string) => void, context?: any) {
-    phaserEvents.on(Event.PLAYER_JOINED, callback, context)
+    this.listen(Event.PLAYER_JOINED, callback, context)
   }
 
   // method to register event listener and call back function when a player left
   onPlayerLeft(callback: (key: string) => void, context?: any) {
-    phaserEvents.on(Event.PLAYER_LEFT, callback, context)
+    this.listen(Event.PLAYER_LEFT, callback, context)
   }
 
   // method to register event listener and call back function when myPlayer is ready to connect
   onMyPlayerReady(callback: (key: string) => void, context?: any) {
-    phaserEvents.on(Event.MY_PLAYER_READY, callback, context)
+    this.listen(Event.MY_PLAYER_READY, callback, context)
   }
 
   // method to register event listener and call back function when my video is connected
   onMyPlayerVideoConnected(callback: (key: string) => void, context?: any) {
-    phaserEvents.on(Event.MY_PLAYER_VIDEO_CONNECTED, callback, context)
+    this.listen(Event.MY_PLAYER_VIDEO_CONNECTED, callback, context)
   }
 
   // method to register event listener and call back function when a player updated
@@ -462,7 +522,7 @@ export default class Network {
     callback: (field: string, value: number | string, key: string) => void,
     context?: any
   ) {
-    phaserEvents.on(Event.PLAYER_UPDATED, callback, context)
+    this.listen(Event.PLAYER_UPDATED, callback, context)
   }
 
   // method to send player updates to Colyseus server

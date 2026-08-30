@@ -5,6 +5,8 @@ import { ITEM_SPECS, ITEM_TYPES } from '../../../types/Items'
 import { TILESETS } from '../../../types/MapLayers'
 import store from '../stores'
 import { setRoomJoined } from '../stores/RoomStore'
+import { setLoggedIn } from '../stores/UserStore'
+import { leftOffice } from '../stores/leftOffice'
 import { OfficeMapUnavailable } from '../joinErrors'
 
 export default class Bootstrap extends Phaser.Scene {
@@ -126,6 +128,51 @@ export default class Bootstrap extends Phaser.Scene {
       })
       this.load.start()
     })
+  }
+
+  /**
+   * Walks the player out of the office they are in and into the public lobby,
+   * which is where the stairs of an office of somebody's own lead.
+   *
+   * They stay logged in on the way: nobody left the app, so being asked for a
+   * name and a face again would read as having been thrown out of it. The
+   * game scene puts the player back together on the other side - see
+   * Game.restorePlayer().
+   */
+  async returnToLobby() {
+    await this.leaveOffice()
+    await this.network.joinOrCreatePublic()
+    await this.launchGame()
+  }
+
+  /**
+   * The lobby's own way out, which is all the way out: back to the list of
+   * offices, which until now could only be reached by reloading the page.
+   *
+   * This is the one exit that does log the player out, because the next thing
+   * they do is choose somewhere else to be, and that has its own login screen.
+   * The listing is rejoined because joining a room drops it - see
+   * Network.initialize() - so without this the room list would be whatever it
+   * happened to say when this player first arrived.
+   */
+  async returnToRoomSelection() {
+    await this.leaveOffice()
+    store.dispatch(setLoggedIn(false))
+    await this.network.joinLobbyRoom()
+  }
+
+  /**
+   * The part both ways out share.
+   *
+   * The scene is stopped before the room is left rather than after, so that it
+   * is not drawing people out of state that is in the middle of being
+   * disconnected. Everything the office was is forgotten last, once there is
+   * nothing left running that could put any of it back.
+   */
+  private async leaveOffice() {
+    this.scene.stop('game')
+    await this.network.leaveRoom()
+    store.dispatch(leftOffice())
   }
 
   changeBackgroundMode(backgroundMode: BackgroundMode) {

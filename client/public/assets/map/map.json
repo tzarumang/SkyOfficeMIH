@@ -4279,9 +4279,32 @@
          "visible":true,
          "x":0,
          "y":0
+        }, 
+        {
+         "draworder":"topdown",
+         "id":17,
+         "name":"Exit",
+         "objects":[
+                {
+                 "gid":5490,
+                 "height":64,
+                 "id":1271,
+                 "name":"",
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":128,
+                 "x":640,
+                 "y":928
+                }],
+         "opacity":1,
+         "type":"objectgroup",
+         "visible":true,
+         "x":0,
+         "y":0
         }],
- "nextlayerid":17,
- "nextobjectid":1271,
+ "nextlayerid":18,
+ "nextobjectid":1272,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.7.0",
@@ -27444,6 +27467,19 @@
          "tilecount":1,
          "tileheight":64,
          "tilewidth":64
+        }, 
+        {
+         "columns":1,
+         "firstgid":5490,
+         "image":"../items/stairs.png",
+         "imageheight":64,
+         "imagewidth":128,
+         "margin":0,
+         "name":"stairs",
+         "spacing":0,
+         "tilecount":1,
+         "tileheight":64,
+         "tilewidth":128
         }],
  "tilewidth":32,
  "type":"map",

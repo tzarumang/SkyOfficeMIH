@@ -4,6 +4,7 @@ import Chair from './Chair'
 import Computer from './Computer'
 import Whiteboard from './Whiteboard'
 import VendingMachine from './VendingMachine'
+import Exit from './Exit'
 
 /**
  * Which class runs each kind of item. The shared manifest cannot name these,
@@ -16,6 +17,7 @@ const ITEM_CLASSES: Partial<Record<ItemType, typeof Item>> = {
   [ItemType.COMPUTER]: Computer,
   [ItemType.WHITEBOARD]: Whiteboard,
   [ItemType.VENDINGMACHINE]: VendingMachine,
+  [ItemType.EXIT]: Exit,
 }
 
 export function itemClass(type: ItemType) {

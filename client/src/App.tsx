@@ -8,6 +8,7 @@ import LoginDialog from './components/LoginDialog'
 import ComputerDialog from './components/ComputerDialog'
 import WhiteboardDialog from './components/WhiteboardDialog'
 import VideoConnectionDialog from './components/VideoConnectionDialog'
+import ExitDialog from './components/ExitDialog'
 import Chat from './components/Chat'
 import HelperButtonGroup from './components/HelperButtonGroup'
 import MobileVirtualJoystick from './components/MobileVirtualJoystick'
@@ -31,6 +32,7 @@ function App() {
   const whiteboardDialogOpen = useAppSelector((state) => state.whiteboard.whiteboardDialogOpen)
   const videoConnected = useAppSelector((state) => state.user.videoConnected)
   const roomJoined = useAppSelector((state) => state.room.roomJoined)
+  const exitDialogOpen = useAppSelector((state) => state.exit.exitDialogOpen)
 
   // React 19 stopped declaring JSX as a global namespace; it lives on React now
   let ui: React.JSX.Element
@@ -65,6 +67,9 @@ function App() {
       {ui}
       {/* Render HelperButtonGroup if no dialogs are opened. */}
       {!computerDialogOpen && !whiteboardDialogOpen && <HelperButtonGroup />}
+      {/* The way out is asked about over whatever is on screen, and last so
+          that it covers the helper buttons rather than sitting under them. */}
+      {exitDialogOpen && <ExitDialog />}
     </Backdrop>
   )
 }
