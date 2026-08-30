@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 import Network from '../services/Network'
 import { BackgroundMode } from '../../../types/BackgroundMode'
-import { ITEM_SPECS, ITEM_TYPES } from '../../../types/Items'
+import { EXIT_SIGN, ITEM_SPECS, ITEM_TYPES } from '../../../types/Items'
 import { TILESETS } from '../../../types/MapLayers'
 import store from '../stores'
 import { setRoomJoined } from '../stores/RoomStore'
@@ -33,6 +33,10 @@ export default class Bootstrap extends Phaser.Scene {
     this.load.image('sun_moon', 'assets/background/sun_moon.png')
 
     this.load.tilemapTiledJSON('tilemap', 'assets/map/map.json')
+
+    // hung over the stairs by the game scene, so it belongs to no map and no
+    // tileset and is simply loaded by name
+    this.load.image(EXIT_SIGN.texture, EXIT_SIGN.file)
 
     // the map's scenery and its items each name their own artwork
     const sheets = [

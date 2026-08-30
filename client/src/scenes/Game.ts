@@ -15,7 +15,7 @@ import Network from '../services/Network'
 import { zoneManager } from '../zones/ZoneManager'
 import { IPlayer } from '../../../types/IOfficeState'
 import { PlayerBehavior } from '../../../types/PlayerBehavior'
-import { ITEM_SPECS, ITEM_TYPES, ItemSpec, ItemType } from '../../../types/Items'
+import { EXIT_SIGN, ITEM_SPECS, ITEM_TYPES, ItemSpec, ItemType } from '../../../types/Items'
 import { DECOR_LAYERS, DecorLayerSpec, GROUND_LAYER } from '../../../types/MapLayers'
 import { readSpawn } from '../../../types/Spawn'
 import { textureFromAnim } from '../util'
@@ -215,6 +215,7 @@ export default class Game extends Phaser.Scene {
     )
 
     this.hangLogo()
+    this.hangExitSigns()
 
     // An office whose creator asked for a cleaning robot has one in its state
     // from the moment the room was made, so it is already there to be drawn.
@@ -468,6 +469,30 @@ export default class Game extends Phaser.Scene {
     const fit = Math.min(spot.width / sign.width, spot.height / sign.height)
     sign.setScale(fit)
     sign.setDepth(sign.y)
+  }
+
+  /**
+   * A sign over every staircase, saying what it is.
+   *
+   * The way out used to be findable only by walking into it: a staircase at
+   * the end of a corridor reads as the end of a corridor, and nothing in the
+   * office said otherwise until the prompt appeared at arm's length. This is
+   * the instruction, and it is part of the building rather than a panel drawn
+   * over it.
+   *
+   * It hangs above the players rather than among them - it is bolted to the
+   * ceiling and you walk under it - so it takes a depth past the bottom of the
+   * map, which is past the largest depth any player standing on the floor can
+   * have. The dialog boxes sit far above both and still cover it.
+   */
+  private hangExitSigns() {
+    this.itemsByType.get(ItemType.EXIT)?.forEach((stairs) => {
+      const top = stairs.y - stairs.height / 2
+      this.add
+        .image(stairs.x, top - EXIT_SIGN.gap, EXIT_SIGN.texture)
+        .setOrigin(0.5, 1)
+        .setDepth(this.map.heightInPixels)
+    })
   }
 
   /**

@@ -171,6 +171,32 @@ export const ITEM_SPECS: Record<ItemType, ItemSpec> = {
   },
 }
 
+/**
+ * The sign that hangs over a staircase.
+ *
+ * Somewhere to leave from is no use if nobody can find it, and a staircase at
+ * the end of a corridor looks like the end of a corridor. So the way out says
+ * what it is, in the office rather than in a panel over it - the instruction
+ * is a thing bolted to the ceiling that you walk under, like the one in the
+ * building you are sitting in.
+ *
+ * It hangs off the item rather than off anything in the map, so every office
+ * with stairs gets one without the map having to say so twice, and an office
+ * drawn before there were stairs gets neither.
+ */
+export const EXIT_SIGN = {
+  texture: 'exit_sign',
+  file: 'assets/items/exit_sign.png',
+  /**
+   * How far above the top step it hangs.
+   *
+   * A tile and a half, which is enough that somebody standing at the foot of
+   * the stairs is not wearing it - their name floats over their head, and at
+   * any less than this the two overlap.
+   */
+  gap: 48,
+}
+
 /** every item type, in a stable order both sides agree on */
 export const ITEM_TYPES: ItemType[] = [
   ItemType.CHAIR,
