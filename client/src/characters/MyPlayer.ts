@@ -39,6 +39,13 @@ export default class MyPlayer extends Player {
   private playContainerBody: Phaser.Physics.Arcade.Body
   private chairOnSit?: Chair
   public joystickMovement?: JoystickMovement
+  /**
+   * A tap on the on-screen action button, waiting for the next frame to read
+   * it. Held the same way joystick movement is: the button is a React
+   * component and the thing it acts on is a Phaser item, so the two meet at a
+   * field rather than at a call.
+   */
+  private touchAction = false
   private lastMovementSentAt = 0
   private lastSentAnimKey = ''
   constructor(
@@ -84,6 +91,11 @@ export default class MyPlayer extends Player {
 
   handleJoystickMovement(movement: JoystickMovement) {
     this.joystickMovement = movement
+  }
+
+  /** the on-screen stand-in for E and R, for a player who has neither */
+  handleTouchAction() {
+    this.touchAction = true
   }
 
   /**
@@ -135,15 +147,28 @@ export default class MyPlayer extends Player {
      * press was for.
      */
     const pressedE = Phaser.Input.Keyboard.JustDown(keyE)
+    const pressedR = Phaser.Input.Keyboard.JustDown(keyR)
 
-    if (Phaser.Input.Keyboard.JustDown(keyR) && spec?.key === 'R') {
+    /**
+     * And a tap on the on-screen button, which means "use what I am standing
+     * at" - a touchscreen has no E and no R, so the manifest decides which of
+     * the two the tap stands for. Read the same way, and spent the same way:
+     * one tap is one action.
+     */
+    const tapped = this.touchAction
+    this.touchAction = false
+
+    const useE = pressedE || (tapped && spec?.key === 'E')
+    const useR = pressedR || (tapped && spec?.key === 'R')
+
+    if (useR && spec?.key === 'R') {
       item!.use(this.playerId, network)
     }
 
     switch (this.playerBehavior) {
       case PlayerBehavior.IDLE: {
         // if press E in front of selected chair
-        if (pressedE && spec?.key === 'E' && item instanceof Chair) {
+        if (useE && spec?.key === 'E' && item instanceof Chair) {
           const chairItem = item
           /**
            * move player to the chair and play sit animation
@@ -195,7 +220,7 @@ export default class MyPlayer extends Player {
          * takes the player over for a moment and has to be written out here,
          * while the stairs out of the office only need telling they were used.
          */
-        if (pressedE && spec?.key === 'E') {
+        if (useE && spec?.key === 'E') {
           item!.use(this.playerId, network)
         }
 
@@ -257,8 +282,10 @@ export default class MyPlayer extends Player {
       }
 
       case PlayerBehavior.SITTING: {
-        // back to idle if player press E while sitting
-        if (pressedE) {
+        // back to idle if player press E while sitting. A tap counts too, and
+        // needs no item to have been selected: sitting clears the selection,
+        // so there is nothing left whose key the tap could be matched against.
+        if (pressedE || tapped) {
           const parts = this.currentAnimKey.split('_')
           parts[1] = 'idle'
           this.play(parts.join('_'), true)
