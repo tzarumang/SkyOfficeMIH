@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import styled from 'styled-components'
+import Fab from '@mui/material/Fab'
+import TouchAppIcon from '@mui/icons-material/TouchApp'
 import JoystickItem from './Joystick'
 
 import { gameScene } from '../gameHandle'
@@ -26,6 +28,11 @@ const Wrapper = styled.div`
 const JoystickWrapper = styled.div`
   margin-top: auto;
   align-self: flex-end;
+`
+
+const ActionWrapper = styled.div`
+  align-self: flex-end;
+  margin-bottom: 16px;
 `
 export const minimumScreenWidthSize = 650 //px
 
@@ -59,13 +66,33 @@ export default function MobileVirtualJoystick() {
     game?.myPlayer?.handleJoystickMovement(movement)
   }
 
+  /**
+   * What E and R are for everybody else.
+   *
+   * Nothing in this office can be used without a keyboard: the item in front
+   * of the player says "Press E to leave" to somebody holding a phone, which
+   * is the whole of the instruction and none of the means. This is the means,
+   * and it is one button rather than two because the item already knows which
+   * key it answers to.
+   */
+  const handleAction = () => {
+    game?.myPlayer?.handleTouchAction()
+  }
+
   return (
     <Backdrop>
       <Wrapper>
         {!(showChat && hasSmallScreen) && showJoystick && (
-          <JoystickWrapper>
-            <JoystickItem onDirectionChange={handleMovement}></JoystickItem>
-          </JoystickWrapper>
+          <>
+            <ActionWrapper>
+              <Fab color="secondary" size="medium" aria-label="Use" onClick={handleAction}>
+                <TouchAppIcon />
+              </Fab>
+            </ActionWrapper>
+            <JoystickWrapper>
+              <JoystickItem onDirectionChange={handleMovement}></JoystickItem>
+            </JoystickWrapper>
+          </>
         )}
       </Wrapper>
     </Backdrop>
