@@ -35,6 +35,7 @@ const OBJECT_LAYERS = [
   'VendingMachine',
   'Zone',
   'Logo',
+  'Exit',
 ]
 
 export interface TiledMap {

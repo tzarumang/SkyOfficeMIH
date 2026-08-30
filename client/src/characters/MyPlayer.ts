@@ -127,6 +127,15 @@ export default class MyPlayer extends Player {
     // does, because a screen share and a coffee machine share no code.
     const spec = item ? ITEM_SPECS[item.itemType] : undefined
 
+    /**
+     * Asked once a frame, because asking is what spends it: JustDown clears
+     * the flag it reports. More than one thing here wants the same press -
+     * sitting down, standing up, and walking out of the office - and the first
+     * to ask used to take it whether or not it turned out to be the one the
+     * press was for.
+     */
+    const pressedE = Phaser.Input.Keyboard.JustDown(keyE)
+
     if (Phaser.Input.Keyboard.JustDown(keyR) && spec?.key === 'R') {
       item!.use(this.playerId, network)
     }
@@ -134,7 +143,7 @@ export default class MyPlayer extends Player {
     switch (this.playerBehavior) {
       case PlayerBehavior.IDLE: {
         // if press E in front of selected chair
-        if (Phaser.Input.Keyboard.JustDown(keyE) && spec?.key === 'E' && item instanceof Chair) {
+        if (pressedE && spec?.key === 'E' && item instanceof Chair) {
           const chairItem = item
           /**
            * move player to the chair and play sit animation
@@ -178,6 +187,16 @@ export default class MyPlayer extends Player {
           this.chairOnSit = chairItem
           this.playerBehavior = PlayerBehavior.SITTING
           return
+        }
+
+        /**
+         * Anything else that answers to E says for itself what pressing it
+         * does. The chair above is the exception rather than the rule: sitting
+         * takes the player over for a moment and has to be written out here,
+         * while the stairs out of the office only need telling they were used.
+         */
+        if (pressedE && spec?.key === 'E') {
+          item!.use(this.playerId, network)
         }
 
         const speed = 200
@@ -239,7 +258,7 @@ export default class MyPlayer extends Player {
 
       case PlayerBehavior.SITTING: {
         // back to idle if player press E while sitting
-        if (Phaser.Input.Keyboard.JustDown(keyE)) {
+        if (pressedE) {
           const parts = this.currentAnimKey.split('_')
           parts[1] = 'idle'
           this.play(parts.join('_'), true)

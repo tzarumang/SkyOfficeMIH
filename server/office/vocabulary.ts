@@ -372,6 +372,18 @@ export const BOXES: Prefab = {
   ],
 }
 
+/**
+ * The staircase out of the building, map columns 20-23 rows 27-28.
+ *
+ * The hand-drawn office draws its own into the floor, out of two tiles
+ * repeated four columns wide; this is the same picture cut out as a single
+ * sprite so that an office with no such tiles in its floor still gets one.
+ * Four tiles is the width of a corridor, which is not a coincidence - the
+ * corridor was measured off the one the staircase stands at the end of.
+ */
+export const STAIRS = 5490
+export const STAIRS_TILES = { width: 4, height: 2 }
+
 /** a bookcase against a wall, map columns 5-6 rows 15-16 */
 export const BOOKCASE = prefab('Objects', [
   [2831, 2832],
@@ -394,4 +406,5 @@ export const EXPECTED_FIRSTGIDS: Record<string, number> = {
   Basement: 4688,
   vendingmachine: 5488,
   screen: 5489,
+  stairs: 5490,
 }

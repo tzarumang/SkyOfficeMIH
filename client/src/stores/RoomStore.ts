@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { RoomAvailable } from 'colyseus.js'
 import { RoomType } from '../../../types/Rooms'
+import { leftOffice } from './leftOffice'
 
 // 0.16 declares `name` on RoomAvailable itself, and as required rather than
 // optional, so redeclaring it here is both redundant and a narrowing error
@@ -18,6 +19,16 @@ export const roomSlice = createSlice({
   initialState: {
     lobbyJoined: false,
     roomJoined: false,
+    /**
+     * Whether the room joined is the public lobby rather than an office of
+     * somebody's own.
+     *
+     * Recorded by the client from the join it made rather than read off the
+     * room, because the lobby is a room like any other and answers to a name
+     * like any other - "Public Lobby" - so there is nothing in what the server
+     * sends that tells the two apart.
+     */
+    publicLobby: false,
     roomId: '',
     roomSlug: null as string | null,
     roomName: '',
@@ -30,6 +41,9 @@ export const roomSlice = createSlice({
     },
     setRoomJoined: (state, action: PayloadAction<boolean>) => {
       state.roomJoined = action.payload
+    },
+    setPublicLobby: (state, action: PayloadAction<boolean>) => {
+      state.publicLobby = action.payload
     },
     setJoinedRoomData: (
       state,
@@ -63,11 +77,27 @@ export const roomSlice = createSlice({
       state.availableRooms = state.availableRooms.filter((room) => room.roomId !== action.payload)
     },
   },
+  extraReducers: (builder) => {
+    /**
+     * Nothing is joined for the moment. The listing is left alone: it comes
+     * from the lobby connection, which is not the one being dropped, and it is
+     * what the room selection screen shows if that is where this leads.
+     */
+    builder.addCase(leftOffice, (state) => {
+      state.roomJoined = false
+      state.publicLobby = false
+      state.roomId = ''
+      state.roomSlug = null
+      state.roomName = ''
+      state.roomDescription = ''
+    })
+  },
 })
 
 export const {
   setLobbyJoined,
   setRoomJoined,
+  setPublicLobby,
   setJoinedRoomData,
   setAvailableRooms,
   addAvailableRooms,

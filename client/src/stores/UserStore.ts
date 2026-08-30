@@ -3,6 +3,7 @@ import { toPeerId } from '../util'
 import { BackgroundMode } from '../../../types/BackgroundMode'
 
 import { bootstrapScene } from '../gameHandle'
+import { leftOffice } from './leftOffice'
 
 /**
  * The setting covers everything the office makes a noise about - pets, and now
@@ -36,6 +37,17 @@ export const userSlice = createSlice({
     sessionId: '',
     videoConnected: false,
     loggedIn: false,
+    /**
+     * Who this player chose to be, kept here rather than only on the sprite.
+     *
+     * Walking out of one office and into another builds a new sprite, and
+     * without this the name, the face and the pet would be gone with the old
+     * one - the login screen would have to be answered again on the way into
+     * a lobby the player never left the app to reach.
+     */
+    playerName: '',
+    avatar: '',
+    pet: '',
     playerNameMap: new Map<string, string>(),
     showJoystick: window.innerWidth < 650,
     ambientSounds: getInitialAmbientSounds(),
@@ -66,6 +78,15 @@ export const userSlice = createSlice({
     setLoggedIn: (state, action: PayloadAction<boolean>) => {
       state.loggedIn = action.payload
     },
+    /** what the login screen was answered with, so the next office can rebuild it */
+    setIdentity: (
+      state,
+      action: PayloadAction<{ name: string; avatar: string; pet: string }>
+    ) => {
+      state.playerName = action.payload.name
+      state.avatar = action.payload.avatar
+      state.pet = action.payload.pet
+    },
     setPlayerNameMap: (state, action: PayloadAction<{ id: string; name: string }>) => {
       state.playerNameMap.set(toPeerId(action.payload.id), action.payload.name)
     },
@@ -76,6 +97,19 @@ export const userSlice = createSlice({
       state.showJoystick = action.payload
     },
   },
+  extraReducers: (builder) => {
+    /**
+     * The office is behind us: its session id and the names that went with it
+     * mean nothing in the next one, and the camera is torn down with the
+     * connection that carried it. Who this player *is* survives, which is the
+     * whole point of keeping it here.
+     */
+    builder.addCase(leftOffice, (state) => {
+      state.sessionId = ''
+      state.videoConnected = false
+      state.playerNameMap.clear()
+    })
+  },
 })
 
 export const {
@@ -83,6 +117,7 @@ export const {
   setSessionId,
   setVideoConnected,
   setLoggedIn,
+  setIdentity,
   setPlayerNameMap,
   removePlayerNameMap,
   setShowJoystick,

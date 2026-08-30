@@ -297,6 +297,36 @@ export default class WebRTC {
     }
   }
 
+  /**
+   * Lets go of everything this connection owns.
+   *
+   * A mesh of calls is arranged around who is standing next to whom in one
+   * particular office, so it does not survive walking out of that office - it
+   * is torn down here rather than left to time out, which would otherwise
+   * leave the previous room's faces on screen next to the new room's. The
+   * camera goes with it: the permission that turned it on is remembered by
+   * the browser, so the next office asks for it again and gets it back
+   * without troubling anybody.
+   */
+  dispose() {
+    for (const { call, video } of [...this.peers.values(), ...this.onCalledPeers.values()]) {
+      call.close()
+      video.remove()
+    }
+    this.peers.clear()
+    this.onCalledPeers.clear()
+    this.allowedPeers.clear()
+
+    this.myStream?.getTracks().forEach((track) => track.stop())
+    this.myStream = undefined
+    this.myVideo.remove()
+    // the mute and camera buttons work this stream, and it has just stopped
+    this.buttonGrid?.replaceChildren()
+
+    this.myPeer.destroy()
+    store.dispatch(setVideoConnected(false))
+  }
+
   // method to set up mute/unmute and video on/off buttons
   setUpButtons() {
     const audioButton = document.createElement('button')

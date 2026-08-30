@@ -25,6 +25,8 @@ import {
   Prefab,
   PRINTER,
   SOFA_SEATS,
+  STAIRS,
+  STAIRS_TILES,
   STYLES,
   TABLE,
   TILE,
@@ -336,6 +338,11 @@ function hallway(rng: Rng, room: Room): Placement[] {
   const out: Placement[] = []
   const rows = usableRows(room)
   const clear = doorways(room)
+
+  // The way out stands across the far end of the corridor, so the last row of
+  // it is spoken for before anything is lined up along the wall.
+  out.push(stairwell(room))
+  for (let x = room.ix0; x <= room.ix1; x++) clear.add(`${x},${room.iy1}`)
   // Whichever wall has fewer doors in it: every room off the corridor opens
   // through one side of it, so seating that side is seating a wall that is
   // mostly doorway.
@@ -392,6 +399,29 @@ function hallway(rng: Rng, room: Room): Placement[] {
     })
   )
   return out
+}
+
+/**
+ * The staircase out of the building, at the end of the corridor.
+ *
+ * It goes where the hand-drawn office puts its own: the far end of the hallway
+ * from the company logo, half in the end wall and half on the last row of
+ * floor in front of it, which is where somebody stands to use it. That end
+ * wall is the one piece of the building nothing else wants - the logo has the
+ * other end and every room opens off the sides - and it is the wall a corridor
+ * naturally walks you up to.
+ */
+function stairwell(room: Room): Placement {
+  return {
+    layer: 'Exit',
+    gid: STAIRS,
+    tx: room.ix0,
+    // the wall row: Tiled hangs the object from its bottom edge, so the step
+    // above it lands on the last row of corridor floor
+    ty: room.y1,
+    widthPx: STAIRS_TILES.width * TILE,
+    heightPx: STAIRS_TILES.height * TILE,
+  }
 }
 
 /**

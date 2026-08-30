@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { IChatMessage } from '../../../types/IOfficeState'
 import { gameScene } from '../gameHandle'
+import { leftOffice } from './leftOffice'
 
 /**
  * The server keeps the last 100 messages; this is the client copy, which also
@@ -79,6 +80,17 @@ export const chatSlice = createSlice({
     setShowChat: (state, action: PayloadAction<boolean>) => {
       state.showChat = action.payload
     },
+  },
+  extraReducers: (builder) => {
+    /**
+     * What was said in an office belongs to that office. Carrying it into the
+     * next one would show a conversation to people who were never part of it,
+     * and the server sends the new room's history on arrival anyway.
+     */
+    builder.addCase(leftOffice, (state) => {
+      state.chatMessages = []
+      state.focused = false
+    })
   },
 })
 

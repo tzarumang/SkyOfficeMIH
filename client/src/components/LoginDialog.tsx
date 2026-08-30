@@ -16,7 +16,7 @@ import { PETS, PetKind, buildPet, NO_PET, COATS } from '../../../types/Pet'
 import { PetPreview } from '../avatars/PetPreview'
 import { Portrait } from '../avatars/Portrait'
 import { useAppSelector, useAppDispatch } from '../hooks'
-import { setLoggedIn } from '../stores/UserStore'
+import { setIdentity, setLoggedIn } from '../stores/UserStore'
 import { getAvatarString, getColorByString } from '../util'
 
 import { gameScene } from '../gameHandle'
@@ -172,11 +172,16 @@ export default function LoginDialog() {
       // roomJoined can only be true once the engine is up, so `game` is a
       // formality here rather than a case anybody reaches
     } else if (roomJoined && game) {
+      const pet = petKind ? buildPet(petKind, petCoat, seed) : NO_PET
       game.registerKeys()
       game.myPlayer.setPlayerName(name)
       game.myPlayer.setAvatar(avatar)
-      game.myPlayer.setPet(petKind ? buildPet(petKind, petCoat, seed) : NO_PET)
+      game.myPlayer.setPet(pet)
       game.network.readyToConnect()
+      // Remembered, because walking out of this office into another one builds
+      // a new sprite that has to be told the same three things - see
+      // Game.restorePlayer().
+      dispatch(setIdentity({ name, avatar, pet }))
       dispatch(setLoggedIn(true))
     }
   }

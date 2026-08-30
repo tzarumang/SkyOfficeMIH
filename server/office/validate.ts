@@ -224,6 +224,33 @@ export function validate(
     )
   }
 
+  // --- and there is a way out, with room to stand at the foot of it --------
+  //
+  // The staircase is half in the corridor's end wall, so like a whiteboard it
+  // is meant to overlap one and the row in front of it is what matters. An
+  // office nobody can leave is worse than a chair in the wrong place: the only
+  // way out of one is to reload the page.
+  const exits = placements.filter((placement) => placement.layer === 'Exit')
+  if (exits.length !== 1) {
+    fail('an office has one way out', `${exits.length} staircase(s) were placed`)
+  }
+  for (const exit of exits) {
+    const columns = Math.max(1, Math.round(exit.widthPx / TILE))
+    const rows = Math.max(1, Math.round(exit.heightPx / TILE))
+    const foot = exit.ty - rows + 1
+    const standing = []
+    for (let dx = 0; dx < columns; dx++) {
+      const x = exit.tx + dx
+      if (!isFloor(layout, x, foot)) continue
+      if (!reachable.has(foot * width + x)) continue
+      if (solidCells.has(`${x},${foot}`)) continue
+      standing.push(x)
+    }
+    if (standing.length === 0) {
+      fail('the way out can be reached', `the stairs at ${exit.tx},${exit.ty} have nowhere to stand`)
+    }
+  }
+
   // --- a seat is somewhere you can actually sit ----------------------------
   //
   // The reachability above is about the floor plan: it knows walls from floor

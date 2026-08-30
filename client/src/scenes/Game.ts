@@ -66,6 +66,14 @@ export default class Game extends Phaser.Scene {
   }
 
   registerKeys() {
+    /**
+     * Whoever is taking the keyboard is having it: the dialog that asks about
+     * leaving switches it off, and the office it was asked in is gone by the
+     * time the answer comes back - so there is nobody left to switch it on
+     * again, and the player arrived in the next office unable to move.
+     */
+    this.enableKeys()
+
     this.cursors = {
       ...this.keyboard.createCursorKeys(),
       ...(this.keyboard.addKeys('W,S,A,D') as Keyboard),
@@ -84,12 +92,18 @@ export default class Game extends Phaser.Scene {
     })
   }
 
+  /**
+   * The keyboard is asked for rather than asserted here, unlike everywhere
+   * else: these two are called from redux slices, and the scene is stopped for
+   * the moment it takes to move between offices - so they can arrive while
+   * there is no keyboard to turn on or off.
+   */
   disableKeys() {
-    this.keyboard.enabled = false
+    if (this.input.keyboard) this.input.keyboard.enabled = false
   }
 
   enableKeys() {
-    this.keyboard.enabled = true
+    if (this.input.keyboard) this.input.keyboard.enabled = true
   }
 
   create(data: { network: Network; mapKey?: string }) {
@@ -98,6 +112,22 @@ export default class Game extends Phaser.Scene {
     } else {
       this.network = data.network
     }
+
+    /**
+     * This scene runs again each time somebody walks out of one office and
+     * into another, on the same instance - so anything of its own that
+     * outlives a shutdown has to be let go of here. Phaser destroys the
+     * sprites; what is left is this scene's idea of who was in the room, which
+     * would otherwise be a set of dead references the next office is asked
+     * about.
+     */
+    this.otherPlayerMap.clear()
+    this.pets.clear()
+    this.roomba = undefined
+
+    // and the listeners it took out on the office it is leaving, which would
+    // otherwise be handling the next one's events a second time
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.network.stopListening())
 
     createCharacterAnims(this.anims)
 
@@ -134,6 +164,12 @@ export default class Game extends Phaser.Scene {
       const group = this.physics.add.staticGroup({ classType: itemClass(itemType) })
       const objectLayer = this.map.getObjectLayer(spec.layer)
       const itemsById = new Map<string, Item>()
+      // An office drawn before this kind of item existed simply holds none of
+      // them; one missing its chairs is broken, and still says so.
+      if (!objectLayer && spec.optional) {
+        this.itemsByType.set(itemType, itemsById)
+        return
+      }
       if (!objectLayer) throw new Error(`office is missing the "${spec.layer}" layer`)
 
       objectLayer.objects.forEach((object, index) => {
@@ -210,20 +246,38 @@ export default class Game extends Phaser.Scene {
      */
     this.network.replayWhoIsHere()
 
-    /**
-     * And the state of our own player, for the same reason.
-     *
-     * Bootstrap asks the browser whether camera permission was granted on a
-     * previous visit, and if it was, the stream can arrive before this scene
-     * exists - so the announcement that we are on camera is made to nobody.
-     * `videoConnected` is one of the conditions for placing a call, so missing
-     * it means proximity chat never starts at all, however close two people
-     * stand. The store holds the answer either way, so it is read rather than
-     * waited for.
-     */
+    // And our own player, for the same reason and one more.
+    this.restorePlayer()
+  }
+
+  /**
+   * Puts this player back together when nothing else is going to.
+   *
+   * Two different absences are covered here. The first is a race: Bootstrap
+   * asks the browser whether camera permission was granted on a previous
+   * visit, and if it was, the stream can arrive before this scene exists - so
+   * the announcement that we are on camera is made to nobody, and
+   * `videoConnected` is one of the conditions for placing a call, so missing
+   * it means proximity chat never starts at all however close two people
+   * stand.
+   *
+   * The second is walking out of one office and into the next. The login
+   * screen is not shown again - the player never left the app - so nothing
+   * else would tell this new sprite its name, its face and its pet, and
+   * nothing would hand the keys of the scene that just shut down to this one.
+   * The store holds all of it, so it is read rather than waited for.
+   */
+  private restorePlayer() {
     const user = store.getState().user
     if (user.videoConnected) this.myPlayer.videoConnected = true
-    if (user.loggedIn) this.myPlayer.readyToConnect = true
+    if (!user.loggedIn) return
+
+    this.registerKeys()
+    this.myPlayer.setPlayerName(user.playerName)
+    if (user.avatar) this.myPlayer.setAvatar(user.avatar)
+    this.myPlayer.setPet(user.pet)
+    // announces us to this room, and sets readyToConnect on the way through
+    this.network.readyToConnect()
   }
 
   /**
